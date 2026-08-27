@@ -1,0 +1,16 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# WP / wp-env
+/wp-content/
+*.sql
+*.sqlite
+
+# Build artifacts
+/build/
+/dist/
+
+# OS / editor
+.DS_Store
+*.log
