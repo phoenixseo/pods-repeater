@@ -2,10 +2,11 @@
 /vendor/
 /node_modules/
 
-# WP / wp-env
+# wp-env / local overrides (machine-specific, not versioned)
 /wp-content/
 *.sql
 *.sqlite
+.wp-env.local.json
 
 # Build artifacts
 /build/

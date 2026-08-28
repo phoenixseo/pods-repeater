@@ -1,11 +1,13 @@
 {
   "core": "https://wordpress.org/wordpress-6.8.2.zip",
   "plugins": [
-    ".",
-    "https://downloads.wordpress.org/plugin/pods.3.3.9.1.zip"
+    "https://downloads.wordpress.org/plugin/pods.3.3.9.1.zip",
+    "/home/hermes/hermes_agent/workspaces/phoenixseo/sdc-page-builder/pods-repeater"
   ],
   "config": {
     "WP_DEBUG": true,
     "WP_DEBUG_LOG": true
-  }
+  },
+  "port": 8899,
+  "testsEnvironment": false
 }

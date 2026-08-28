@@ -155,7 +155,7 @@ class Pods_Repeater_Field extends PodsField {
 	 *
 	 * @return mixed JSON string or $value.
 	 */
-	public function pre_save( $value = null, $name = null, $options = null, $pod = null, $id = null ) {
+	public function pre_save( $value, $id = null, $name = null, $options = null, $fields = null, $pod = null, $params = null ) {
 		if ( is_array( $value ) || is_object( $value ) ) {
 			return wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
 		}
@@ -173,7 +173,7 @@ class Pods_Repeater_Field extends PodsField {
 	 *
 	 * @return bool|WP_Error
 	 */
-	public function validate( $value = null, $name = null, $options = null, $pod = null, $id = null ) {
+	public function validate( $value = null, $name = null, $options = null, $fields = null, $pod = null, $id = null, $params = null ) {
 		$rows = is_string( $value ) ? json_decode( $value, true ) : $value;
 		if ( ! is_array( $rows ) ) {
 			return true; // Nothing to validate.
@@ -231,7 +231,7 @@ class Pods_Repeater_Field extends PodsField {
 	 *
 	 * @return string HTML.
 	 */
-	public function input( $value = null, $name = null, $options = null, $pod = null, $id = null ) {
+	public function input( $name, $value = null, $options = null, $pod = null, $id = null ) {
 		$rows       = is_array( $value ) ? $value : array();
 		$sub_fields = $this->get_sub_fields( $options );
 		$limit      = ! empty( $options['repeater_limit'] ) ? (int) $options['repeater_limit'] : 0;
@@ -274,7 +274,7 @@ class Pods_Repeater_Field extends PodsField {
 	 *
 	 * @return string
 	 */
-	public function ui( $value = null, $name = null, $options = null, $pod = null, $id = null ) {
+	public function ui( $id = null, $value = null, $name = null, $options = null, $fields = null, $pod = null ) {
 		$rows = is_string( $value ) ? json_decode( $value, true ) : $value;
 		if ( ! is_array( $rows ) ) {
 			return '';
