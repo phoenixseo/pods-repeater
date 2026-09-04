@@ -36,12 +36,20 @@ $field->input( 'items', $value_decoded, $options, null, $post_id );
 $html = ob_get_clean();
 
 // Prüfungen: Werte im HTML? 3 Reihen? Move/Add/Remove-Buttons? Array-Name-Syntax?
+// Werte dynamisch aus der echten Meta (Post 23) — nicht hartkodiert, damit der
+// Test Datenänderungen (z. B. durch spike-t6b-Roundtrips) überlebt.
+$meta_arr = json_decode( (string) $meta, true );
+$val0     = is_array( $meta_arr ) && isset( $meta_arr[0]['subtitle'] ) ? $meta_arr[0]['subtitle'] : '';
+$val1     = is_array( $meta_arr ) && isset( $meta_arr[1]['subtitle'] ) ? $meta_arr[1]['subtitle'] : '';
+$val2     = is_array( $meta_arr ) && isset( $meta_arr[2]['subtitle'] ) ? $meta_arr[2]['subtitle'] : '';
+$link0    = is_array( $meta_arr ) && isset( $meta_arr[0]['link'] ) ? $meta_arr[0]['link'] : '';
+
 $checks = array(
 	'3 Zeilen gerendert'  => substr_count( $html, 'pods-repeater-row' ) >= 3,
-	'Erste Zeile'         => strpos( $html, 'Erste Zeile' ) !== false,
-	'Zweite Zeile'        => strpos( $html, 'Zweite Zeile' ) !== false,
-	'Dritte Zeile'        => strpos( $html, 'Dritte Zeile' ) !== false,
-	'Link 1'              => strpos( $html, 'https://example.com/1' ) !== false,
+	'Zeile 1 Wert'        => $val0 !== '' && strpos( $html, $val0 ) !== false,
+	'Zeile 2 Wert'        => $val1 !== '' && strpos( $html, $val1 ) !== false,
+	'Zeile 3 Wert'        => $val2 !== '' && strpos( $html, $val2 ) !== false,
+	'Link 1'              => $link0 !== '' && strpos( $html, $link0 ) !== false,
 	'Add-Button'          => strpos( $html, 'pods-repeater-add' ) !== false,
 	'Remove-Button'       => strpos( $html, 'pods-repeater-remove' ) !== false,
 	'Move-up-Button'      => strpos( $html, 'pods-repeater-move-up' ) !== false,

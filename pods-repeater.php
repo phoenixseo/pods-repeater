@@ -9,6 +9,7 @@
  * License:     GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: pods-repeater
+ * Domain Path: /languages
  * Requires at least: 6.4
  * Requires PHP: 7.4
  * Requires Plugins: pods
@@ -60,6 +61,21 @@ function pods_repeater_init() {
 	}
 }
 add_action( 'plugins_loaded', 'pods_repeater_init' );
+
+/**
+ * Translations laden (Text Domain 'pods-repeater').
+ *
+ * Gebündelte .mo-Dateien liegen in /languages (siehe Domain-Path-Header);
+ * wp.org-Sprachpakete übernimmt WordPress automatisch. Hook auf 'init' wie
+ * von WP 6.7+ empfohlen (JIT-Warnung „translation loading triggered too
+ * early" bei plugins_loaded). Bewusst nicht an Pods gebunden: Die
+ * __()-Aufrufe (classes/field-repeater.php) feuern erst beim Feld-Rendering
+ * im Admin, also lange nach init.
+ */
+function pods_repeater_load_textdomain() {
+	load_plugin_textdomain( 'pods-repeater', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+}
+add_action( 'init', 'pods_repeater_load_textdomain' );
 
 /**
  * Enqueue the repeater admin JS (ui/js/repeater.js).

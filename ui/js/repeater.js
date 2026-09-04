@@ -45,8 +45,15 @@
 	function removeRow(button) {
 		const row = button.closest('.pods-repeater-row');
 		if (row) {
+			// rows VOR row.remove() aufloesen: .pods-repeater-rows ist der
+			// direkte Parent der Row — closest() auf einem detached Node
+			// liefert null, renumber(null) crashte mit TypeError (E2E-Fund
+			// 04.09.2026) und liess data-index/input-names unrenumbered zurueck.
+			const rows = row.closest('.pods-repeater-rows');
 			row.remove();
-			renumber(row.closest('.pods-repeater-rows'));
+			if (rows) {
+				renumber(rows);
+			}
 		}
 	}
 

@@ -2,7 +2,7 @@
 
 Repeatable field groups (ACF-Repeater equivalent) for [Pods](https://pods.io) — as a **generic, community-first** field type. SDC Page Builder is one consumer among many.
 
-**Status:** Skeleton (Phase A Spike pending). Not production-ready yet.
+**Status:** In Entwicklung — Phase A abgeschlossen (JSON-Roundtrip verifiziert, Commit `8c0863b`); Phase B (MVP) in Arbeit: T4 (Admin-Rendering, `24e355c`) und T5 (Judge-Fixes, `fffe483`) committet, i18n-Vollständigkeit committet. Noch nicht produktionsreif (Phase-B-Reste: E2E-Browser-Test im Admin, WPUnit-Testbasis, readme.txt/.phpcs.xml).
 
 ## Why
 
@@ -38,7 +38,7 @@ npx wp-env run cli wp plugin list
 
 ## Roadmap
 
-- [ ] Phase A — Spike: JSON roundtrip (T3/T5) in wp-env
+- [x] Phase A — Spike: JSON roundtrip (T3/T5) in wp-env (Commit `8c0863b`)
 - [ ] Phase B — Plugin MVP: production-ready for foreign users
 - [ ] Phase C — PR Phase 1 to pods-framework/pods
 - [ ] Phase D — Feedback window; builder on the plugin

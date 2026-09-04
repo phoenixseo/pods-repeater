@@ -74,15 +74,12 @@ class El {
   }
 
   remove() {
-    // Echten DOM nicht 1:1 nachbildbar: closest() nach remove() muss noch
-    // den letzten Parent kennen (repeater.js: removeRow ruft row.remove()
-    // und dann row.closest('.pods-repeater-rows')). In echtem DOM bleibt
-    // die Referenz über das entfernte Element erhalten; hier merken wir
-    // uns den Parent explizit.
-    if (this.parent) {
-      this._removedFrom = this.parent;
-      this.parent.removeChild(this);
-    }
+    // Echten DOM exakt nachbilden: Nach remove() ist das Element detached —
+    // ein anschließendes closest() muss null liefern (wie im Browser).
+    // Genau dieser Umstand war der E2E-Bug (removeRow rief renumber() über
+    // closest() auf dem entfernten Node auf → TypeError); der Harness darf
+    // das NICHT wegmaskieren, sonst entsteht ein falscher PASS.
+    if (this.parent) this.parent.removeChild(this);
   }
 
   matches(sel) {
@@ -114,8 +111,7 @@ class El {
     let n = this;
     while (n) {
       if (n.matches(sel)) return n;
-      // Nach remove(): Kette über den gemerkten letzten Parent fortsetzen.
-      n = n.parent || n._removedFrom || null;
+      n = n.parent;
     }
     return null;
   }

@@ -43,6 +43,13 @@ class Pods_Repeater_Field extends PodsField {
 	public static $type = 'repeater';
 
 	/**
+	 * Human-readable type name (shown in the Pods field-type picker).
+	 *
+	 * Static property defaults cannot call functions, so this stays the
+	 * untranslated fallback for get_class_vars() consumers; setup() swaps
+	 * in the __()-translated label (same pattern as Pods core
+	 * classes/fields/text.php).
+	 *
 	 * @var string
 	 */
 	public static $label = 'Repeater (Repeatable Group)';
@@ -67,6 +74,18 @@ class Pods_Repeater_Field extends PodsField {
 	 */
 	public function __construct() {
 		parent::__construct();
+	}
+
+	/**
+	 * Initial setup: translate the static type label.
+	 *
+	 * PodsField::__construct() ruft setup() auf; field_loader() liest die
+	 * Klassenvariablen erst NACH der Instantiierung (classes/PodsForm.php:1601,
+	 * field_types():1750-1760), daher greift hier die übersetzte Fassung —
+	 * identisches Muster wie Pods Core (classes/fields/text.php, setup()).
+	 */
+	public function setup() {
+		static::$label = __( 'Repeater (Repeatable Group)', 'pods-repeater' );
 	}
 
 	/**
@@ -280,7 +299,24 @@ class Pods_Repeater_Field extends PodsField {
 			return;
 		}
 
-		$rows       = is_array( $value ) ? $value : array();
+		// Admin-Render-Pfad (PodsMeta::meta_post → ui/forms/table-rows.php →
+		// PodsForm::field): $pod->field( [ 'name' => ..., 'in_form' => true ] )
+		// liefert den ROHEN JSON-String aus wp_postmeta — value()/Decode wird
+		// bei in_form übersprungen (E2E-Trace 04.09.2026). input() akzeptiert
+		// daher beides: Array (API/Direktaufruf) und JSON-String (Admin-Formular).
+		// Nicht-JSON-Strings ('' wenn keine Meta existiert) bleiben leer.
+		$rows = array();
+
+		if ( is_string( $value ) ) {
+			$decoded = json_decode( $value, true );
+
+			if ( JSON_ERROR_NONE === json_last_error() && is_array( $decoded ) ) {
+				$rows = $decoded;
+			}
+		} elseif ( is_array( $value ) ) {
+			$rows = $value;
+		}
+
 		$sub_fields = $this->get_sub_fields( $options );
 		$limit      = ! empty( $options['repeater_limit'] ) ? (int) $options['repeater_limit'] : 0;
 
