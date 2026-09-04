@@ -64,12 +64,20 @@
 	}
 
 	function renumber(rows) {
+		const name = rows.dataset.name || '';
 		rows.querySelectorAll('.pods-repeater-row').forEach(function (row, i) {
 			row.dataset.index = String(i);
 			row.querySelectorAll('[data-sub]').forEach(function (input) {
-				const name = input.name.replace(/\[\d+\]\[/, '[' + i + '][');
-				input.name = name;
-				input.id = input.id.replace(/_\d+_/, '_' + i + '_');
+				const sub = input.dataset.sub;
+				if (!sub) {
+					return;
+				}
+				// Kompletter Name/ID-Rebuild aus dem Container-Namen + Index +
+				// data-sub (wie addRow) statt Regex auf bestehende Namen: die
+				// alte /_\d+_/-Ersetzung korrumpierte Feldnamen, die selbst ein
+				// '_ziffer_'-Muster enthalten (z. B. 'row1_2_x').
+				input.name = name + '[' + i + '][' + sub + ']';
+				input.id = name + '_' + i + '_' + sub;
 			});
 		});
 	}

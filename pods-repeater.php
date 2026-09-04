@@ -60,3 +60,64 @@ function pods_repeater_init() {
 	}
 }
 add_action( 'plugins_loaded', 'pods_repeater_init' );
+
+/**
+ * Enqueue the repeater admin JS (ui/js/repeater.js).
+ *
+ * The admin UI is server-side rendered (input()) and driven by this vanilla
+ * script (add/move/remove rows). Without enqueueing it, the buttons are inert
+ * (Judge-Review 24e355c, Empfehlung 2). admin_enqueue_scripts only fires in
+ * the admin; on top of that we limit loading to screens that can host Pods
+ * forms (post/user/comment/term editors + Pods admin UI) so the script does
+ * not load on every admin page. Registered with a unique handle, no
+ * dependencies, loaded in the footer → no conflict with other plugins.
+ *
+ * @param string $hook_suffix Current admin page hook.
+ */
+function pods_repeater_enqueue_admin_assets( $hook_suffix ) {
+	if ( ! class_exists( 'Pods' ) ) {
+		return; // No Pods → no repeater field possible.
+	}
+
+	$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+
+	// Screen unknown (very early hook / CLI context): load conservatively —
+	// the hook itself is already the admin boundary.
+	if ( $screen && ! pods_repeater_screen_hosts_forms( $screen ) ) {
+		return;
+	}
+
+	wp_enqueue_script(
+		'pods-repeater',
+		PODS_REPEATER_URL . 'ui/js/repeater.js',
+		array(),
+		PODS_REPEATER_VERSION,
+		true
+	);
+}
+
+/**
+ * Can this admin screen host Pods forms (meta boxes / Pods UI)?
+ *
+ * @param WP_Screen $screen Current screen.
+ *
+ * @return bool
+ */
+function pods_repeater_screen_hosts_forms( $screen ) {
+	if ( ! $screen instanceof WP_Screen ) {
+		return false;
+	}
+
+	// Pods admin (UI / Settings / editor pages): parent base is 'pods'.
+	if ( 'pods' === $screen->parent_base ) {
+		return true;
+	}
+
+	// Editor screens where Pods meta boxes / fields can appear.
+	return in_array(
+		$screen->base,
+		array( 'post', 'user-edit', 'profile', 'comment', 'term', 'edit-tags' ),
+		true
+	);
+}
+add_action( 'admin_enqueue_scripts', 'pods_repeater_enqueue_admin_assets' );

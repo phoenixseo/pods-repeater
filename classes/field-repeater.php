@@ -161,9 +161,26 @@ class Pods_Repeater_Field extends PodsField {
 	 * @return mixed JSON string or $value.
 	 */
 	public function pre_save( $value, $id = null, $name = null, $options = null, $fields = null, $pod = null, $params = null ) {
-		if ( is_array( $value ) || is_object( $value ) ) {
+		if ( is_array( $value ) ) {
+			// Vollständig leere Zeilen verwerfen: input() seedet bei leerem Wert
+			// eine leere Template-Zeile (Judge-Review 24e355c, Empfehlung 1) — die
+			// darf nie als '[{}]'-Zeile persistieren (würde mit required-Sub-Feldern
+			// jeden Save blockieren). Zeilen mit mindestens einem gesetzten Wert
+			// (auch 0/'0') bleiben erhalten.
+			$value = array_values( array_filter(
+				$value,
+				function ( $row ) {
+					return ! $this->is_row_empty( $row );
+				}
+			) );
+
 			return wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
 		}
+
+		if ( is_object( $value ) ) {
+			return wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
+		}
+
 		return $value;
 	}
 
@@ -185,6 +202,14 @@ class Pods_Repeater_Field extends PodsField {
 		}
 		$sub_fields = $this->get_sub_fields( $options );
 		foreach ( $rows as $row ) {
+			// Vollständig leere Zeilen überspringen: die von input() geseedete
+			// Leerzeile darf required-Sub-Felder nicht blockieren (sie wird in
+			// pre_save ohnehin verworfen). Teilgefüllte Zeilen mit leerem
+			// required-Wert bleiben ein Validierungsfehler.
+			if ( $this->is_row_empty( $row ) ) {
+				continue;
+			}
+
 			foreach ( $sub_fields as $sub ) {
 				if ( ! empty( $sub['required'] ) && empty( $row[ $sub['name'] ] ) ) {
 					return new WP_Error( 'pods_repeater_required', sprintf(
@@ -228,16 +253,22 @@ class Pods_Repeater_Field extends PodsField {
 	 * Renders each sub-field via PodsForm::field() where possible; falls back
 	 * to native inputs for types Pods cannot render standalone.
 	 *
-	 * @param mixed|null      $value   Current value (array of rows).
+	 * Pods-Konvention: input() gibt KEINEN Wert zurück, sondern echo-t das
+	 * HTML. PodsForm::field() fängt den Output via ob_start()/ob_get_clean()
+	 * ein (classes/PodsForm.php:289/328) und ignoriert den Rückgabewert.
+	 *
 	 * @param string|null     $name    Field name.
-	 * @param array|null      $options Field options.
+	 * @param mixed|null      $value   Current value (array of rows).
+	 * @param array|object|null $options Field options (Array oder Whatsit\Field-Objekt).
 	 * @param object|null     $pod     Pod object.
 	 * @param int|string|null $id      Item ID.
 	 *
-	 * @return string HTML.
+	 * @return void Gibt HTML direkt aus.
 	 */
 	public function input( $name, $value = null, $options = null, $pod = null, $id = null ) {
-		$options = ( is_array( $options ) || is_object( $options ) ) ? $options : (array) $options;
+		// Whatsit\Field-Objekte via get_args() normalisieren (wie PodsForm::options(),
+		// classes/PodsForm.php:706-712) — get_sub_fields() etc. arbeiten nur auf Arrays.
+		$options = $this->normalize_options( $options );
 
 		// DFV-Pfad (React) nur, wenn der Nutzer DFV nicht explizit deaktiviert hat.
 		// Custom-Feldtypen ohne DFV-Komponente rendern über die eigene input()-Logik
@@ -391,17 +422,72 @@ class Pods_Repeater_Field extends PodsField {
 	}
 
 	/**
+	 * Normalize field options to a plain array.
+	 *
+	 * Pods übergibt Optionen mal als Array (PodsForm::options() merged Defaults
+	 * und liefert ein Array), mal als Whatsit\Field-Objekt (z. B. direkte
+	 * input()-Aufrufe mit $pod['fields'][...]). Whatsit-Objekte sind zwar
+	 * ArrayAccess, aber die interne Logik (get_sub_fields(), get_field_name())
+	 * arbeitet nur auf echten Arrays — Objekte daher via get_args() auflösen
+	 * (gleiches Muster wie PodsForm::options(), classes/PodsForm.php:706-712).
+	 *
+	 * @param array|object|null $options Feld-Optionen (Array, Whatsit\Field oder null).
+	 *
+	 * @return array
+	 */
+	protected function normalize_options( $options ) {
+		if ( is_object( $options ) ) {
+			if ( method_exists( $options, 'get_args' ) ) {
+				$options = $options->get_args();
+			} else {
+				$options = (array) $options;
+			}
+		}
+
+		return is_array( $options ) ? $options : array();
+	}
+
+	/**
+	 * Is a repeater row completely empty?
+	 *
+	 * input() seeds one empty template row when the value is empty (so the JS
+	 * template and "add" always work). Such a row must never persist as an
+	 * empty '{}' entry, and it must not block required sub-field validation.
+	 * A row counts as empty when none of its values is set (''/null/missing).
+	 * Explicit values like 0, '0' or false count as filled and are kept.
+	 *
+	 * @param mixed $row Repeater row (expected array).
+	 *
+	 * @return bool
+	 */
+	protected function is_row_empty( $row ) {
+		if ( ! is_array( $row ) ) {
+			return false; // Unexpected non-array row: do not discard.
+		}
+
+		foreach ( $row as $value ) {
+			if ( is_array( $value ) ) {
+				if ( ! $this->is_row_empty( $value ) ) {
+					return false;
+				}
+			} elseif ( '' !== $value && null !== $value ) {
+				return false; // Any set value → row is filled.
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Parse the sub-field configuration from the field options (JSON string).
 	 *
-	 * @param array|null $options Field options.
+	 * @param array|object|null $options Field options (Array oder Whatsit\Field-Objekt).
 	 *
 	 * @return array List of sub-field definitions.
 	 */
 	protected function get_sub_fields( $options = null ) {
-		$raw = '';
-		if ( is_array( $options ) ) {
-			$raw = isset( $options['repeater_sub_fields'] ) ? $options['repeater_sub_fields'] : '';
-		}
+		$options = $this->normalize_options( $options );
+		$raw     = isset( $options['repeater_sub_fields'] ) ? $options['repeater_sub_fields'] : '';
 		$decoded = json_decode( (string) $raw, true );
 		return is_array( $decoded ) ? $decoded : array();
 	}
