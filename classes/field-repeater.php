@@ -34,7 +34,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  * (PodsInit.php:200-203) — the plugin prefix maps to the same file on disk.
  */
 class Pods_Repeater_Field extends PodsField {
-
 	/**
 	 * Static properties are read by PodsForm::field_loader() via get_class_vars()
 	 * (classes/PodsForm.php:1561-1564, 1615-1618).
@@ -93,6 +92,12 @@ class Pods_Repeater_Field extends PodsField {
 				'label'   => __( 'Max rows', 'pods-repeater' ),
 				'type'    => 'number',
 				'default' => 0, // 0 = unlimited
+			),
+			'disable_dfv'         => array(
+				'label'   => __( 'Disable DFV', 'pods-repeater' ),
+				'help'    => __( 'Render with the PHP input() renderer instead of the React DFV pipeline (required for custom field types without a DFV component).', 'pods-repeater' ),
+				'type'    => 'boolean',
+				'default' => true,
 			),
 		);
 	}
@@ -232,12 +237,29 @@ class Pods_Repeater_Field extends PodsField {
 	 * @return string HTML.
 	 */
 	public function input( $name, $value = null, $options = null, $pod = null, $id = null ) {
+		$options = ( is_array( $options ) || is_object( $options ) ) ? $options : (array) $options;
+
+		// DFV-Pfad (React) nur, wenn der Nutzer DFV nicht explizit deaktiviert hat.
+		// Custom-Feldtypen ohne DFV-Komponente rendern über die eigene input()-Logik
+		// (Muster wie classes/fields/phone.php — disable_dfv => eigenes PHP-HTML).
+		if ( empty( $options['disable_dfv'] ) ) {
+			$args = (object) compact( array_keys( get_defined_vars() ) );
+			$this->render_input_script( $args );
+
+			return;
+		}
+
 		$rows       = is_array( $value ) ? $value : array();
 		$sub_fields = $this->get_sub_fields( $options );
 		$limit      = ! empty( $options['repeater_limit'] ) ? (int) $options['repeater_limit'] : 0;
 
 		// Field name used by Pods for this field (array syntax for rows).
 		$field_name = $this->get_field_name( $name, $options );
+
+		// Seed at least one empty row so the JS template + "add" always work.
+		if ( empty( $rows ) ) {
+			$rows = array( array() );
+		}
 
 		ob_start();
 		?>
@@ -248,19 +270,103 @@ class Pods_Repeater_Field extends PodsField {
 						<?php foreach ( $sub_fields as $sub ) : ?>
 							<label>
 								<span><?php echo esc_html( $sub['label'] ); ?></span>
-								<input type="text"
-									name="<?php echo esc_attr( $field_name ); ?>[<?php echo esc_attr( $index ); ?>][<?php echo esc_attr( $sub['name'] ); ?>]"
-									value="<?php echo esc_attr( isset( $row[ $sub['name'] ] ) ? $row[ $sub['name'] ] : '' ); ?>" />
+								<?php $this->render_sub_field_input( $field_name, $index, $sub, $row ); ?>
 							</label>
 						<?php endforeach; ?>
-						<button type="button" class="pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>">×</button>
+						<button type="button" class="pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>">↑</button>
+						<button type="button" class="pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>">↓</button>
+						<button type="button" class="pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>">×</button>
 					</div>
 				<?php endforeach; ?>
 			</div>
 			<button type="button" class="button pods-repeater-add"><?php esc_html_e( 'Add row', 'pods-repeater' ); ?></button>
 		</div>
 		<?php
-		return ob_get_clean();
+		echo ob_get_clean(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — Pods-Konvention: input() echo-t, PodsForm::options() fängt es via ob_start()/ob_get_clean() ein.
+	}
+
+	/**
+	 * Render a single sub-field input based on its declared type.
+	 *
+	 * Supports the scalar types from the V1 scope (text/textarea/select/number/url).
+	 * Every input carries data-sub so the JS row-clone can rebuild names correctly.
+	 *
+	 * @param string $field_name Parent field name (HTML name prefix).
+	 * @param int    $index      Row index.
+	 * @param array  $sub        Sub-field definition.
+	 * @param array  $row        Row values.
+	 */
+	protected function render_sub_field_input( $field_name, $index, $sub, $row ) {
+		$sub_name = isset( $sub['name'] ) ? $sub['name'] : '';
+		$sub_type = isset( $sub['type'] ) ? $sub['type'] : 'text';
+		$value    = isset( $row[ $sub_name ] ) ? $row[ $sub_name ] : '';
+		$input_id = $field_name . '_' . $index . '_' . $sub_name;
+
+		// HTML name pattern: <field>[<idx>][<sub>] — array arrives server-side.
+		$input_name = $field_name . '[' . $index . '][' . $sub_name . ']';
+
+		switch ( $sub_type ) {
+			case 'textarea':
+				printf(
+					'<textarea id="%s" name="%s" data-sub="%s" rows="3">%s</textarea>',
+					esc_attr( $input_id ),
+					esc_attr( $input_name ),
+					esc_attr( $sub_name ),
+					esc_textarea( $value )
+				);
+				break;
+
+			case 'select':
+				$options_html = '';
+				$choices      = isset( $sub['options'] ) && is_array( $sub['options'] ) ? $sub['options'] : array();
+				foreach ( $choices as $opt_value => $opt_label ) {
+					$options_html .= sprintf(
+						'<option value="%s"%s>%s</option>',
+						esc_attr( $opt_value ),
+						selected( (string) $value, (string) $opt_value, false ),
+						esc_html( $opt_label )
+					);
+				}
+				printf(
+					'<select id="%s" name="%s" data-sub="%s">%s</select>',
+					esc_attr( $input_id ),
+					esc_attr( $input_name ),
+					esc_attr( $sub_name ),
+					$options_html
+				);
+				break;
+
+			case 'number':
+				printf(
+					'<input type="number" id="%s" name="%s" data-sub="%s" value="%s" />',
+					esc_attr( $input_id ),
+					esc_attr( $input_name ),
+					esc_attr( $sub_name ),
+					esc_attr( $value )
+				);
+				break;
+
+			case 'url':
+				printf(
+					'<input type="url" id="%s" name="%s" data-sub="%s" value="%s" />',
+					esc_attr( $input_id ),
+					esc_attr( $input_name ),
+					esc_attr( $sub_name ),
+					esc_attr( $value )
+				);
+				break;
+
+			case 'text':
+			default:
+				printf(
+					'<input type="text" id="%s" name="%s" data-sub="%s" value="%s" />',
+					esc_attr( $input_id ),
+					esc_attr( $input_name ),
+					esc_attr( $sub_name ),
+					esc_attr( $value )
+				);
+				break;
+		}
 	}
 
 	/**
@@ -317,3 +423,22 @@ class Pods_Repeater_Field extends PodsField {
 		return (string) $name;
 	}
 }
+
+/**
+ * Class PodsField_Repeater
+ *
+ * Pods' field_loader() (classes/PodsForm.php:1550) resolves a field type to a
+ * class by the hard-coded convention "PodsField_" + ucfirst( $field_type ).
+ * A plugin-prefixed class (Pods_Repeater_Field) alone is therefore never
+ * found: field_loader silently falls back to the base PodsField class, whose
+ * input() ignores disable_dfv and always renders the DFV (React) script —
+ * which is why the admin meta box showed 0 rows despite disable_dfv='1'.
+ *
+ * This thin subclass bridges the convention: field_loader finds
+ * PodsField_Repeater, which carries all logic via its parent. The plugin
+ * prefix stays as the main implementation (collision-free if Pods core ever
+ * ships its own PodsField_Repeater — this file simply would not be loaded for
+ * core types then, since core registers its own path first).
+ */
+class PodsField_Repeater extends Pods_Repeater_Field {}
+

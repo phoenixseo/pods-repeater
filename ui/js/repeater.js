@@ -8,8 +8,12 @@
 (function () {
 	'use strict';
 
+	function getRows(container) {
+		return container.querySelector('.pods-repeater-rows');
+	}
+
 	function addRow(container) {
-		const rows = container.querySelector('.pods-repeater-rows');
+		const rows = getRows(container);
 		const limit = parseInt(container.dataset.limit || '0', 10);
 		if (limit > 0 && rows.querySelectorAll('.pods-repeater-row').length >= limit) {
 			return;
@@ -19,16 +23,21 @@
 		const index = rows.querySelectorAll('.pods-repeater-row').length;
 		const template = container.querySelector('.pods-repeater-row');
 		if (!template) {
-			// No template row — render a fresh row from sub-field definitions.
-			// (Full implementation in Phase B; spike renders rows server-side.)
 			return;
 		}
 
 		const clone = template.cloneNode(true);
 		clone.dataset.index = String(index);
-		clone.querySelectorAll('[name]').forEach(function (input) {
+		clone.querySelectorAll('[data-sub]').forEach(function (input) {
 			input.name = name + '[' + index + '][' + input.dataset.sub + ']';
-			input.value = '';
+			input.id = name + '_' + index + '_' + input.dataset.sub;
+			if (input.tagName === 'TEXTAREA') {
+				input.value = '';
+			} else if (input.tagName === 'SELECT') {
+				input.selectedIndex = 0;
+			} else {
+				input.value = '';
+			}
 		});
 		rows.appendChild(clone);
 	}
@@ -41,11 +50,26 @@
 		}
 	}
 
+	function moveRow(button, delta) {
+		const row = button.closest('.pods-repeater-row');
+		const rows = row ? row.closest('.pods-repeater-rows') : null;
+		if (!row || !rows) {
+			return;
+		}
+		const sibling = delta < 0 ? row.previousElementSibling : row.nextElementSibling;
+		if (sibling) {
+			rows.insertBefore(row, delta < 0 ? sibling : sibling.nextElementSibling);
+			renumber(rows);
+		}
+	}
+
 	function renumber(rows) {
 		rows.querySelectorAll('.pods-repeater-row').forEach(function (row, i) {
 			row.dataset.index = String(i);
-			row.querySelectorAll('[name]').forEach(function (input) {
-				input.name = input.name.replace(/\[\d+\]\[/, '[' + i + '][');
+			row.querySelectorAll('[data-sub]').forEach(function (input) {
+				const name = input.name.replace(/\[\d+\]\[/, '[' + i + '][');
+				input.name = name;
+				input.id = input.id.replace(/_\d+_/, '_' + i + '_');
 			});
 		});
 	}
@@ -59,6 +83,16 @@
 		const remove = event.target.closest('.pods-repeater-remove');
 		if (remove) {
 			removeRow(remove);
+			return;
+		}
+		const up = event.target.closest('.pods-repeater-move-up');
+		if (up) {
+			moveRow(up, -1);
+			return;
+		}
+		const down = event.target.closest('.pods-repeater-move-down');
+		if (down) {
+			moveRow(down, 1);
 		}
 	});
 })();
