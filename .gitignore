@@ -12,6 +12,12 @@
 /build/
 /dist/
 
+# PHPUnit (WPUnit-Testbasis)
+/.phpunit.cache/
+.phpunit.result.cache
+# WP-Test-Lib ist eine nachgezogene Lib (18 MB) — nicht versionieren
+/tests/wp-tests/
+
 # OS / editor
 .DS_Store
 *.log

@@ -2,7 +2,7 @@
 
 Repeatable field groups (ACF-Repeater equivalent) for [Pods](https://pods.io) — as a **generic, community-first** field type. SDC Page Builder is one consumer among many.
 
-**Status:** In Entwicklung — Phase A abgeschlossen (JSON-Roundtrip verifiziert, Commit `8c0863b`); Phase B (MVP) in Arbeit: T4 (Admin-Rendering, `24e355c`) und T5 (Judge-Fixes, `fffe483`) committet, i18n-Vollständigkeit committet. Noch nicht produktionsreif (Phase-B-Reste: E2E-Browser-Test im Admin, WPUnit-Testbasis, readme.txt/.phpcs.xml).
+**Status:** In development — Phase A complete (JSON roundtrip verified, commit `8c0863b`); Phase-B wave (commit `f70fd01`) complete: T4 admin rendering (`24e355c`), T5 judge fixes (`fffe483`), E2E browser test in the admin (two real bugs found and fixed: removeRow JS crash, raw JSON string path in `input()`), i18n completeness. WPUnit test base added (PHPUnit 9.6 + WordPress test library, `RepeaterRoundtripTest`: 3 tests / 26 assertions green). Not production-ready yet — remaining items: readme.txt, .phpcs.xml.
 
 ## Why
 
