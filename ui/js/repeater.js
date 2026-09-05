@@ -39,7 +39,44 @@
 				input.value = '';
 			}
 		});
+		// DFV-Sub-Felder (kein data-sub, aber name mit [index]) ebenfalls
+		// auf die neue Zeile umbiegen, damit Pods' React-Komponenten beim
+		// Row-Klon den richtigen Namen bekommen.
+		clone.querySelectorAll('.pods-repeater-subfield').forEach(function (wrapper) {
+			wrapper.querySelectorAll('[name]').forEach(function (input) {
+				if (input.dataset.sub) {
+					return; // bereits oben behandelt
+				}
+				const nameNow = input.getAttribute('name') || '';
+				if (nameNow.indexOf('[') === -1) {
+					return;
+				}
+				input.setAttribute('name', nameNow.replace(/\[\d+\]/, '[' + index + ']'));
+				input.setAttribute('id', (input.getAttribute('id') || '').replace(/_\d+_/, '_' + index + '_'));
+			});
+		});
 		rows.appendChild(clone);
+		runRowScripts(clone);
+	}
+
+	/**
+	 * Re-run inline <script>s of a freshly cloned row.
+	 *
+	 * Browsers do NOT execute <script> content of cloned nodes, and Pods'
+	 * field types (number/date/color/…) emit small inline jQuery helpers
+	 * (blur filters, pickers) inside their markup. Without re-running them
+	 * a cloned row would carry dead <script> elements. Scripts are created
+	 * fresh (same text) so the helpers bind to the new row's inputs; the
+	 * admin page always has jQuery loaded globally.
+	 *
+	 * @param {HTMLElement} root Cloned row.
+	 */
+	function runRowScripts(root) {
+		root.querySelectorAll('script').forEach(function (oldScript) {
+			const fresh = document.createElement('script');
+			fresh.textContent = oldScript.textContent;
+			oldScript.parentNode.replaceChild(fresh, oldScript);
+		});
 	}
 
 	function removeRow(button) {

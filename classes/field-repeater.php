@@ -435,10 +435,19 @@ class Pods_Repeater_Field extends PodsField {
 				<?php foreach ( $rows as $index => $row ) : ?>
 					<div class="pods-repeater-row" data-index="<?php echo esc_attr( $index ); ?>">
 						<?php foreach ( $sub_fields as $sub ) : ?>
-							<label class="pods-repeater-subfield pods-repeater-subfield-<?php echo esc_attr( $sub['name'] ); ?>">
-								<span class="pods-repeater-subfield-label"><?php echo esc_html( $sub['label'] ); ?></span>
+							<?php
+							// Innen liegende <label>s (boolean/pick-radio) machen ein
+							// äußeres <label> ungültig — daher div-Wrapper. heading/html
+							// sind display-only und haben kein Eingabe-Element.
+							$sub_type        = isset( $sub['type'] ) ? $sub['type'] : 'text';
+							$is_display_only = in_array( $sub_type, array( 'heading', 'html' ), true );
+							?>
+							<div class="pods-repeater-subfield pods-repeater-subfield-<?php echo esc_attr( isset( $sub['name'] ) ? $sub['name'] : $sub_type ); ?>">
+								<?php if ( ! $is_display_only ) : ?>
+									<span class="pods-repeater-subfield-label"><?php echo esc_html( isset( $sub['label'] ) ? $sub['label'] : $sub_type ); ?></span>
+								<?php endif; ?>
 								<?php $this->render_sub_field_input( $field_name, $index, $sub, $row ); ?>
-							</label>
+							</div>
 						<?php endforeach; ?>
 						<button type="button" class="button pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>">↑</button>
 						<button type="button" class="button pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?> " title="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>">↓</button>
@@ -455,10 +464,14 @@ class Pods_Repeater_Field extends PodsField {
 	}
 
 	/**
-	 * Render a single sub-field input based on its declared type.
+	 * Render a single sub-field input.
 	 *
-	 * Supports the scalar types from the V1 scope (text/textarea/select/number/url).
-	 * Every input carries data-sub so the JS row-clone can rebuild names correctly.
+	 * Delegates to Pods' own field pipeline (PodsForm::field()) so that any
+	 * Pods field type registered in field_types() works out of the box —
+	 * including its type-specific options. The nested HTML name
+	 * (<field>[<idx>][<sub>]) is produced by passing the full expression as
+	 * $name (PodsForm::merge_attributes() builds name/id from it), plus
+	 * data-sub on the attributes for the JS row-clone/renumber contract.
 	 *
 	 * @param string $field_name Parent field name (HTML name prefix).
 	 * @param int    $index      Row index.
@@ -466,76 +479,196 @@ class Pods_Repeater_Field extends PodsField {
 	 * @param array  $row        Row values.
 	 */
 	protected function render_sub_field_input( $field_name, $index, $sub, $row ) {
-		$sub_name = isset( $sub['name'] ) ? $sub['name'] : '';
-		$sub_type = isset( $sub['type'] ) ? $sub['type'] : 'text';
-		$value    = isset( $row[ $sub_name ] ) ? $row[ $sub_name ] : '';
-		$input_id = $field_name . '_' . $index . '_' . $sub_name;
+		$sub_name = isset( $sub['name'] ) ? (string) $sub['name'] : '';
+		$sub_type = isset( $sub['type'] ) ? (string) $sub['type'] : 'text';
 
-		// HTML name pattern: <field>[<idx>][<sub>] — array arrives server-side.
-		$input_name = $field_name . '[' . $index . '][' . $sub_name . ']';
-
-		switch ( $sub_type ) {
-			case 'textarea':
-				printf(
-					'<textarea id="%s" name="%s" data-sub="%s" rows="3">%s</textarea>',
-					esc_attr( $input_id ),
-					esc_attr( $input_name ),
-					esc_attr( $sub_name ),
-					esc_textarea( $value )
-				);
-				break;
-
-			case 'select':
-				$options_html = '';
-				$choices      = isset( $sub['options'] ) && is_array( $sub['options'] ) ? $sub['options'] : array();
-				foreach ( $choices as $opt_value => $opt_label ) {
-					$options_html .= sprintf(
-						'<option value="%s"%s>%s</option>',
-						esc_attr( $opt_value ),
-						selected( (string) $value, (string) $opt_value, false ),
-						esc_html( $opt_label )
-					);
-				}
-				printf(
-					'<select id="%s" name="%s" data-sub="%s">%s</select>',
-					esc_attr( $input_id ),
-					esc_attr( $input_name ),
-					esc_attr( $sub_name ),
-					$options_html // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Options markup built above from individually escaped fragments.
-				);
-				break;
-
-			case 'number':
-				printf(
-					'<input type="number" id="%s" name="%s" data-sub="%s" value="%s" />',
-					esc_attr( $input_id ),
-					esc_attr( $input_name ),
-					esc_attr( $sub_name ),
-					esc_attr( $value )
-				);
-				break;
-
-			case 'url':
-				printf(
-					'<input type="url" id="%s" name="%s" data-sub="%s" value="%s" />',
-					esc_attr( $input_id ),
-					esc_attr( $input_name ),
-					esc_attr( $sub_name ),
-					esc_attr( $value )
-				);
-				break;
-
-			case 'text':
-			default:
-				printf(
-					'<input type="text" id="%s" name="%s" data-sub="%s" value="%s" />',
-					esc_attr( $input_id ),
-					esc_attr( $input_name ),
-					esc_attr( $sub_name ),
-					esc_attr( $value )
-				);
-				break;
+		if ( '' === $sub_name ) {
+			return;
 		}
+
+		$value = isset( $row[ $sub_name ] ) ? $row[ $sub_name ] : '';
+
+		// Repeater darf nicht in sich selbst verschachtelt werden.
+		if ( 'repeater' === $sub_type ) {
+			echo '<p class="description">' . esc_html__( 'Nested repeaters are not supported.', 'pods-repeater' ) . '</p>';
+
+			return;
+		}
+
+		// Reine Anzeige-Typen haben keinen speicherbaren Wert.
+		if ( in_array( $sub_type, array( 'heading', 'html' ), true ) ) {
+			$this->render_sub_field_display( $sub );
+
+			return;
+		}
+
+		// pick/tableless rendert nur über DFV (React). Für den Repeater
+		// (disable_dfv=1, JS-zeilenbasiert) bauen wir ein natives serverseitiges
+		// Kontrollelement aus den Optionen — kein React-Script in Zeilen.
+		if ( 'pick' === $sub_type ) {
+			$this->render_sub_field_pick( $field_name, $index, $sub, $value );
+
+			return;
+		}
+
+		$input_name = $field_name . '[' . $index . '][' . $sub_name . ']';
+		$input_id   = $field_name . '_' . $index . '_' . $sub_name;
+
+		// Pods-eigene Pipeline: Typ-Klasse + ui/fields/<type>.php-Template.
+		// merge_attributes() baut name/id aus $name, data-sub wird über die
+		// attributes durchgereicht. DFV ist deaktiviert — bewusst, der
+		// Repeater klont Zeilen serverseitig gerendert per JS.
+		$options = array(
+			'type'        => $sub_type,
+			'name_prefix' => '',
+			'disable_dfv' => '1',
+			'label'       => isset( $sub['label'] ) ? $sub['label'] : $sub_name,
+			'attributes'  => array(
+				'id'       => $input_id,
+				'data-sub' => $sub_name,
+			),
+		);
+
+		// Typspezifische Sub-Feld-Optionen durchreichen (z. B. maxlength,
+		// format, wysiwyg_editor_height), sofern vorhanden.
+		foreach ( array( 'options', 'data', 'default', 'format', 'maxlength', 'placeholder', 'wysiwyg_editor_height', 'wysiwyg_editor' ) as $opt_key ) {
+			if ( isset( $sub[ $opt_key ] ) && ! isset( $options[ $opt_key ] ) ) {
+				$options[ $opt_key ] = $sub[ $opt_key ];
+			}
+		}
+
+		try {
+			$html = (string) PodsForm::field( $input_name, $value, $sub_type, $options, null, null );
+		} catch ( Throwable $e ) {
+			// Wir rendern kein halbes Feld: Fallback auf natives Text-Input.
+			$html = '';
+		}
+
+		// wysiwyg (TinyMCE/Quicktags) verschluckt data-sub in seinem eigenen
+		// Options-Handling; der JS-Kontrakt braucht data-sub aber auf einem
+		// Element in der Zeile. Fallback: data-sub am Wrapper statt am Input.
+		if ( '' === $html || false === strpos( $html, 'data-sub="' . $sub_name . '"' ) ) {
+			echo '<span class="pods-repeater-subfield-input" data-sub="' . esc_attr( $sub_name ) . '">';
+			if ( '' !== $html ) {
+				echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pods-generated field markup.
+			}
+			echo '</span>';
+
+			return;
+		}
+
+		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Pods-generated field markup.
+	}
+
+	/**
+	 * Render display-only sub-fields (heading/html): no input, no name.
+	 *
+	 * @param array $sub Sub-field definition.
+	 */
+	protected function render_sub_field_display( $sub ) {
+		$text = isset( $sub['label'] ) ? $sub['label'] : ( isset( $sub['name'] ) ? $sub['name'] : '' );
+
+		if ( isset( $sub['type'] ) && 'html' === $sub['type'] ) {
+			$allowed = array(
+				'a'      => array(
+					'href'   => true,
+					'title'  => true,
+					'target' => true,
+				),
+				'strong' => array(),
+				'em'     => array(),
+				'br'     => array(),
+				'code'   => array(),
+			);
+			echo wp_kses( $text, $allowed ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_kses() output is safe by construction.
+		} else {
+			echo '<h4>' . esc_html( $text ) . '</h4>';
+		}
+	}
+
+	/**
+	 * Render a pick sub-field as native controls (no DFV/React).
+	 *
+	 * @param string $field_name Parent field name.
+	 * @param int    $index      Row index.
+	 * @param array  $sub        Sub-field definition.
+	 * @param mixed  $value      Current value.
+	 */
+	protected function render_sub_field_pick( $field_name, $index, $sub, $value ) {
+		$sub_name   = isset( $sub['name'] ) ? (string) $sub['name'] : '';
+		$input_name = $field_name . '[' . $index . '][' . $sub_name . ']';
+		$input_id   = $field_name . '_' . $index . '_' . $sub_name;
+
+		$format = isset( $sub['pick_format_type'] ) ? $sub['pick_format_type'] : 'single';
+		$format = in_array( $format, array( 'single', 'multi' ), true ) ? $format : 'single';
+
+		$data = isset( $sub['data'] ) ? $sub['data'] : array();
+		if ( ! is_array( $data ) ) {
+			$data = array();
+		}
+
+		if ( empty( $data ) ) {
+			echo '<p class="description">' . esc_html__( 'No options defined for this pick field.', 'pods-repeater' ) . '</p>';
+
+			return;
+		}
+
+		if ( 'multi' === $format ) {
+			// Multi: Checkbox-Gruppe; der Name ist bereits der vollständige
+			// items[i][sub] — ein weiteres [sub] würde doppelt verschachteln.
+			echo '<div class="pods-repeater-pick-multi" data-sub="' . esc_attr( $sub_name ) . '">';
+			$values = is_array( $value ) ? $value : array( $value );
+			foreach ( $data as $opt_value => $opt_label ) {
+				$opt_value = (string) $opt_value;
+				printf(
+					'<label><input type="checkbox" name="%1$s" value="%2$s" data-sub="%3$s"%4$s /> %5$s</label>',
+					esc_attr( $input_name ),
+					esc_attr( $opt_value ),
+					esc_attr( $sub_name ),
+					checked( in_array( $opt_value, array_map( 'strval', $values ), true ), true, false ),
+					esc_html( $opt_label )
+				);
+			}
+			echo '</div>';
+
+			return;
+		}
+
+		$format_type = isset( $sub['pick_format_type_single'] ) ? $sub['pick_format_type_single'] : 'dropdown';
+		if ( 'radio' === $format_type ) {
+			foreach ( $data as $opt_value => $opt_label ) {
+				$opt_value = (string) $opt_value;
+				printf(
+					'<label><input type="radio" name="%1$s" value="%2$s" data-sub="%3$s"%4$s /> %5$s</label>',
+					esc_attr( $input_name ),
+					esc_attr( $opt_value ),
+					esc_attr( $sub_name ),
+					checked( (string) $value, $opt_value, false ),
+					esc_html( $opt_label )
+				);
+			}
+
+			return;
+		}
+
+		// Default: Dropdown.
+		printf(
+			'<select id="%1$s" name="%2$s" data-sub="%3$s">',
+			esc_attr( $input_id ),
+			esc_attr( $input_name ),
+			esc_attr( $sub_name )
+		);
+		echo '<option value="">' . esc_html__( '— Select —', 'pods-repeater' ) . '</option>';
+		foreach ( $data as $opt_value => $opt_label ) {
+			$opt_value = (string) $opt_value;
+			printf(
+				'<option value="%1$s"%2$s>%3$s</option>',
+				esc_attr( $opt_value ),
+				selected( (string) $value, $opt_value, false ),
+				esc_html( $opt_label )
+			);
+		}
+		echo '</select>';
 	}
 
 	/**
