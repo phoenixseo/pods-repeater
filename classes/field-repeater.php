@@ -101,18 +101,45 @@ class Pods_Repeater_Field extends PodsField {
 	 */
 	public function options() {
 		return array(
-			'repeater_sub_fields' => array(
+			'repeater_sub_fields'               => array(
 				'label'   => __( 'Sub-Fields (JSON)', 'pods-repeater' ),
 				'help'    => __( 'JSON array of sub-field definitions.', 'pods-repeater' ),
 				'type'    => 'paragraph',
 				'default' => '[]',
 			),
-			'repeater_limit'      => array(
+			'repeater_limit'                    => array(
 				'label'   => __( 'Max rows', 'pods-repeater' ),
 				'type'    => 'number',
 				'default' => 0, // 0 = unlimited
 			),
-			'disable_dfv'         => array(
+			// Pods-Display-Konvention (Muster pick.php _display_format_multi):
+			// Format ist Feldoption, keine hartkodierte Liste. default reiht
+			// die Zeilen mit Komma aneinander, ul/ol als Liste, br mit <br />.
+			'repeater_display_format'           => array(
+				'label'      => __( 'Display Format', 'pods-repeater' ),
+				'help'       => __( 'Used as format for front-end display.', 'pods-repeater' ),
+				'default'    => 'default',
+				'required'   => true,
+				'type'       => 'pick',
+				'data'       => array(
+					'default' => __( 'Item 1, Item 2', 'pods-repeater' ),
+					'br'      => __( 'One per line (br HTML tags)', 'pods-repeater' ),
+					'ul'      => __( 'Unordered HTML list', 'pods-repeater' ),
+					'ol'      => __( 'Ordered HTML list', 'pods-repeater' ),
+					'custom'  => __( 'Custom separator', 'pods-repeater' ),
+				),
+				'dependency' => true,
+			),
+			'repeater_display_format_separator' => array(
+				'label'      => __( 'Display Format Separator', 'pods-repeater' ),
+				'help'       => __( 'Used as separator for front-end display.', 'pods-repeater' ),
+				'depends-on' => array(
+					'repeater_display_format' => 'custom',
+				),
+				'default'    => ', ',
+				'type'       => 'text',
+			),
+			'disable_dfv'                       => array(
 				'label'   => __( 'Disable DFV', 'pods-repeater' ),
 				'help'    => __( 'Render with the PHP input() renderer instead of the React DFV pipeline (required for custom field types without a DFV component).', 'pods-repeater' ),
 				'type'    => 'boolean',
@@ -267,15 +294,76 @@ class Pods_Repeater_Field extends PodsField {
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return '';
 		}
-		return '<ul class="pods-repeater-display">' . implode(
-			'',
-			array_map(
-				static function ( $row ) use ( $options ) {
-					return '<li>' . esc_html( wp_json_encode( $row, JSON_UNESCAPED_UNICODE ) ) . '</li>';
-				},
-				$rows
-			)
-		) . '</ul>';
+
+		$sub_fields = $this->get_sub_fields( $options );
+
+		// Pods-Display-Konvention (Muster classes/fields/pick.php): das
+		// Container-Format ist eine Feldoption, kein hartkodiertes HTML.
+		// `default` reiht die Zeilen mit Komma aneinander (pods_serial_comma),
+		// `ul`/`ol` nutzen das Pods-Listenmuster, `br` trennt mit <br />.
+		$format    = pods_v( 'repeater_display_format', $options, 'default', true );
+		$separator = pods_v( 'repeater_display_format_separator', $options, ', ', true );
+
+		$lines = array();
+
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+
+			if ( empty( $sub_fields ) ) {
+				$lines[] = esc_html( (string) $row );
+
+				continue;
+			}
+
+			$cells = array();
+
+			foreach ( $sub_fields as $sub ) {
+				$sub_name = isset( $sub['name'] ) ? $sub['name'] : '';
+				$sub_type = isset( $sub['type'] ) ? $sub['type'] : 'text';
+
+				if ( '' === $sub_name || ! array_key_exists( $sub_name, $row ) ) {
+					continue;
+				}
+
+				$sub_value = $row[ $sub_name ];
+
+				// Pods-Konvention: den Wert durch die display()-Methode des
+				// Sub-Feldtyps rendern (link -> natives <a>, website -> <a>
+				// wenn clickable, text -> esc_html) — Muster PodsForm::field_method().
+				$rendered = PodsForm::field_method( $sub_type, 'display', $sub_value, $sub_name, $sub, $pod, $id );
+
+				if ( null === $rendered ) {
+					$rendered = esc_html( (string) $sub_value );
+				}
+
+				if ( '' !== trim( (string) $rendered ) ) {
+					$cells[] = $rendered;
+				}
+			}
+
+			// Eine Zeile = ihre Sub-Werte, durch Komma getrennt (keine Label-Spannen).
+			$lines[] = implode( ', ', $cells );
+		}
+
+		switch ( $format ) {
+			case 'ul':
+			case 'ol':
+				$value = '<' . $format . '><li>' . implode( '</li><li>', $lines ) . '</li></' . $format . '>';
+				break;
+			case 'br':
+				$value = implode( '<br />', $lines );
+				break;
+			case 'custom':
+				$value = implode( $separator, $lines );
+				break;
+			default:
+				$value = implode( ', ', $lines );
+				break;
+		}
+
+		return $value;
 	}
 
 	/**
@@ -342,19 +430,19 @@ class Pods_Repeater_Field extends PodsField {
 
 		ob_start();
 		?>
-		<div class="pods-repeater" data-limit="<?php echo esc_attr( $limit ); ?>">
+		<div class="pods-form-ui-field pods-form-ui-field-type-repeater pods-form-ui-field-name-<?php echo esc_attr( PodsForm::clean( $name, true ) ); ?> pods-repeater" data-limit="<?php echo esc_attr( $limit ); ?>">
 			<div class="pods-repeater-rows" data-name="<?php echo esc_attr( $field_name ); ?>">
 				<?php foreach ( $rows as $index => $row ) : ?>
 					<div class="pods-repeater-row" data-index="<?php echo esc_attr( $index ); ?>">
 						<?php foreach ( $sub_fields as $sub ) : ?>
-							<label>
-								<span><?php echo esc_html( $sub['label'] ); ?></span>
+							<label class="pods-repeater-subfield pods-repeater-subfield-<?php echo esc_attr( $sub['name'] ); ?>">
+								<span class="pods-repeater-subfield-label"><?php echo esc_html( $sub['label'] ); ?></span>
 								<?php $this->render_sub_field_input( $field_name, $index, $sub, $row ); ?>
 							</label>
 						<?php endforeach; ?>
-						<button type="button" class="pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>">↑</button>
-						<button type="button" class="pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>">↓</button>
-						<button type="button" class="pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>">×</button>
+						<button type="button" class="button pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>">↑</button>
+						<button type="button" class="button pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?> " title="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>">↓</button>
+						<button type="button" class="button pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>">×</button>
 					</div>
 				<?php endforeach; ?>
 			</div>
@@ -553,12 +641,26 @@ class Pods_Repeater_Field extends PodsField {
 	 * @return string
 	 */
 	protected function get_field_name( $name, $options = null ) {
-		// Pods typically names the input after the field name. Options may
-		// carry a 'name' override (e.g. prefixed meta key).
-		if ( is_array( $options ) && ! empty( $options['name'] ) ) {
-			return (string) $options['name'];
+		$options = $this->normalize_options( $options );
+
+		$field_name = $name;
+		if ( ! empty( $options['name'] ) ) {
+			// Options may carry a 'name' override (e.g. prefixed meta key).
+			$field_name = $options['name'];
 		}
-		return (string) $name;
+
+		// Admin meta-box forms run under a field prefix (PodsMeta.php:1354
+		// sets $field_prefix = 'pods_meta_'; PodsForm::field() passes it
+		// through $options['name_prefix'], PodsForm.php:117/178/620).
+		// The POST data is keyed by prefix+name, so the rendered inputs must
+		// use that prefixed name — otherwise the admin save path reads an
+		// empty $_POST slot and wipes the stored value.
+		$prefix = ! empty( $options['name_prefix'] ) ? (string) $options['name_prefix'] : '';
+		if ( '' !== $prefix && 0 !== strpos( (string) $field_name, $prefix ) ) {
+			$field_name = $prefix . $field_name;
+		}
+
+		return (string) $field_name;
 	}
 }
 
