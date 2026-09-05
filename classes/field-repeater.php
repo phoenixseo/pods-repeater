@@ -172,10 +172,12 @@ class Pods_Repeater_Field extends PodsField {
 	 * Value preparation ON WRITE: array → JSON string (before Pods stores it).
 	 *
 	 * @param mixed|null      $value   Value to save (array of rows).
+	 * @param int|string|null $id      Item ID.
 	 * @param string|null     $name    Field name.
 	 * @param array|null      $options Field options.
+	 * @param array|null      $fields  All fields of the pod.
 	 * @param object|null     $pod     Pod object.
-	 * @param int|string|null $id      Item ID.
+	 * @param array|null      $params  Additional parameters.
 	 *
 	 * @return mixed JSON string or $value.
 	 */
@@ -186,12 +188,14 @@ class Pods_Repeater_Field extends PodsField {
 			// darf nie als '[{}]'-Zeile persistieren (würde mit required-Sub-Feldern
 			// jeden Save blockieren). Zeilen mit mindestens einem gesetzten Wert
 			// (auch 0/'0') bleiben erhalten.
-			$value = array_values( array_filter(
-				$value,
-				function ( $row ) {
-					return ! $this->is_row_empty( $row );
-				}
-			) );
+			$value = array_values(
+				array_filter(
+					$value,
+					function ( $row ) {
+						return ! $this->is_row_empty( $row );
+					}
+				)
+			);
 
 			return wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
 		}
@@ -209,8 +213,10 @@ class Pods_Repeater_Field extends PodsField {
 	 * @param mixed|null      $value   Value to validate (array of rows or JSON string).
 	 * @param string|null     $name    Field name.
 	 * @param array|null      $options Field options.
+	 * @param array|null      $fields  All fields of the pod.
 	 * @param object|null     $pod     Pod object.
 	 * @param int|string|null $id      Item ID.
+	 * @param array|null      $params  Additional parameters.
 	 *
 	 * @return bool|WP_Error
 	 */
@@ -231,11 +237,14 @@ class Pods_Repeater_Field extends PodsField {
 
 			foreach ( $sub_fields as $sub ) {
 				if ( ! empty( $sub['required'] ) && empty( $row[ $sub['name'] ] ) ) {
-					return new WP_Error( 'pods_repeater_required', sprintf(
+					return new WP_Error(
+						'pods_repeater_required',
+						sprintf(
 						/* translators: %s: sub-field label */
-						__( 'Field "%s" is required in every row.', 'pods-repeater' ),
-						$sub['label']
-					) );
+							__( 'Field "%s" is required in every row.', 'pods-repeater' ),
+							$sub['label']
+						)
+					);
 				}
 			}
 		}
@@ -258,12 +267,15 @@ class Pods_Repeater_Field extends PodsField {
 		if ( ! is_array( $rows ) || empty( $rows ) ) {
 			return '';
 		}
-		return '<ul class="pods-repeater-display">' . implode( '', array_map(
-			static function ( $row ) use ( $options ) {
-				return '<li>' . esc_html( wp_json_encode( $row, JSON_UNESCAPED_UNICODE ) ) . '</li>';
-			},
-			$rows
-		) ) . '</ul>';
+		return '<ul class="pods-repeater-display">' . implode(
+			'',
+			array_map(
+				static function ( $row ) use ( $options ) {
+					return '<li>' . esc_html( wp_json_encode( $row, JSON_UNESCAPED_UNICODE ) ) . '</li>';
+				},
+				$rows
+			)
+		) . '</ul>';
 	}
 
 	/**
@@ -276,11 +288,11 @@ class Pods_Repeater_Field extends PodsField {
 	 * HTML. PodsForm::field() fängt den Output via ob_start()/ob_get_clean()
 	 * ein (classes/PodsForm.php:289/328) und ignoriert den Rückgabewert.
 	 *
-	 * @param string|null     $name    Field name.
-	 * @param mixed|null      $value   Current value (array of rows).
+	 * @param string|null       $name    Field name.
+	 * @param mixed|null        $value   Current value (array of rows).
 	 * @param array|object|null $options Field options (Array oder Whatsit\Field-Objekt).
-	 * @param object|null     $pod     Pod object.
-	 * @param int|string|null $id      Item ID.
+	 * @param object|null       $pod     Pod object.
+	 * @param int|string|null   $id      Item ID.
 	 *
 	 * @return void Gibt HTML direkt aus.
 	 */
@@ -349,7 +361,9 @@ class Pods_Repeater_Field extends PodsField {
 			<button type="button" class="button pods-repeater-add"><?php esc_html_e( 'Add row', 'pods-repeater' ); ?></button>
 		</div>
 		<?php
-		echo ob_get_clean(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped — Pods-Konvention: input() echo-t, PodsForm::options() fängt es via ob_start()/ob_get_clean() ein.
+		// Pods-Konvention: input() echo-t; PodsForm::options() fängt die Ausgabe
+		// via ob_start()/ob_get_clean() ein (classes/PodsForm.php:706-712).
+		echo ob_get_clean(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Buffered markup, individually escaped above.
 	}
 
 	/**
@@ -399,7 +413,7 @@ class Pods_Repeater_Field extends PodsField {
 					esc_attr( $input_id ),
 					esc_attr( $input_name ),
 					esc_attr( $sub_name ),
-					$options_html
+					$options_html // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Options markup built above from individually escaped fragments.
 				);
 				break;
 
@@ -439,11 +453,12 @@ class Pods_Repeater_Field extends PodsField {
 	/**
 	 * List-view display (admin columns): e.g. "3 entries".
 	 *
+	 * @param int|string|null $id      Item ID.
 	 * @param mixed|null      $value   Array of rows or raw.
 	 * @param string|null     $name    Field name.
 	 * @param array|null      $options Field options.
+	 * @param array|null      $fields  All fields of the pod.
 	 * @param object|null     $pod     Pod object.
-	 * @param int|string|null $id      Item ID.
 	 *
 	 * @return string
 	 */
@@ -486,11 +501,12 @@ class Pods_Repeater_Field extends PodsField {
 	/**
 	 * Is a repeater row completely empty?
 	 *
-	 * input() seeds one empty template row when the value is empty (so the JS
-	 * template and "add" always work). Such a row must never persist as an
-	 * empty '{}' entry, and it must not block required sub-field validation.
-	 * A row counts as empty when none of its values is set (''/null/missing).
-	 * Explicit values like 0, '0' or false count as filled and are kept.
+	 * This seeds one empty template row in the UI when the stored value is
+	 * empty (so the JS template and "add" always work). Such a row must
+	 * never persist as an empty '{}' entry, and it must not block required
+	 * sub-field validation. A row counts as empty when none of its values is
+	 * set (''/null/missing). Explicit values like 0, '0' or false count as
+	 * filled and are kept.
 	 *
 	 * @param mixed $row Repeater row (expected array).
 	 *

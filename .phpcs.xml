@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<ruleset name="Pods Repeater Coding Standards">
+
+	<!-- Code style follows the Pods project so a future PR to
+	     pods-framework/pods passes review. Pods' own .phpcs.xml layers
+	     StellarWP (dev-main "StellarWP" standard) on top of WPCS. The
+	     stable stellarwp/coding-standards 1.x registers its standard as
+	     "TEC" and enforces short arrays ([]), which conflicts with this
+	     codebase's Pods-style long arrays (array()). We therefore use the
+	     WPCS layers Pods explicitly references (WordPress / -Extra /
+	     -Docs / -Core) directly, without the StellarWP/VIP-Go layers
+	     (VIP-Go targets the WordPress VIP platform, not a generic plugin).
+	-->
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/tests/*</exclude-pattern>
+
+	<arg name="extensions" value="php"/>
+	<arg name="colors"/>
+	<arg name="report" value="full,summary"/>
+
+	<!-- Main file name does not follow the class-*.php convention because
+	     the plugin bootstrap is a single entry point; the field class file
+	     name mirrors Pods' own class-podsfield-* layout requirement. -->
+	<rule ref="WordPress">
+		<exclude name="WordPress.Files.FileName"/>
+	</rule>
+	<rule ref="WordPress-Extra"/>
+	<rule ref="WordPress-Docs"/>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="pods_repeater"/>
+			</property>
+		</properties>
+		<!-- The PodsField_Repeater bridge class (classes/field-repeater.php)
+		     MUST keep this exact name: PodsForm::field_loader() resolves field
+		     types by the hard-coded "PodsField_" + ucfirst( $field_type )
+		     convention. A plugin-prefixed name would silently fall back to the
+		     base PodsField class and break admin rendering. Two classes in one
+		     file keep the convention bridge next to its implementation;
+		     splitting files would scatter the documented pairing. -->
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound"/>
+	</rule>
+	<rule ref="Generic.Files.OneObjectStructurePerFile">
+		<exclude name="Generic.Files.OneObjectStructurePerFile.MultipleFound"/>
+	</rule>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="pods-repeater"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

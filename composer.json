@@ -5,13 +5,20 @@
     "license": "GPL-2.0-or-later",
     "require": {},
     "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
         "phpunit/phpunit": "^9.6",
+        "stellarwp/coding-standards": "^1.0",
+        "wp-coding-standards/wpcs": "^3.1",
         "yoast/phpunit-polyfills": "^2.0"
     },
     "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        },
         "sort-packages": true
     },
     "scripts": {
-        "test": "phpunit -c phpunit.xml.dist"
+        "test": "phpunit -c phpunit.xml.dist",
+        "phpcs": "phpcs"
     }
 }
