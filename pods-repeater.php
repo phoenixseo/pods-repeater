@@ -63,6 +63,51 @@ function pods_repeater_init() {
 add_action( 'plugins_loaded', 'pods_repeater_init' );
 
 /**
+ * Add a custom field option (editor container) to the Repeater field type's
+ * options tab in the Pods field editor (admin.php?page=pods&action=edit).
+ *
+ * The Pods field editor builds the per-type "Additional Field Options" schema
+ * in src/Pods/Admin/Config/Field.php (get_fields()). For every registered
+ * field type it fires the type-specific filter
+ * 'pods_admin_setup_edit_{$type}_additional_field_options' (Field.php:678).
+ * We append an 'html' option to that schema: DFV renders an 'html' option as a
+ * raw div (ui/js/dfv/src/fields/html-field/index.js) via dangerouslySetInnerHTML
+ * with class "pods-form-ui-html-{name}" — no React involvement needed.
+ *
+ * The option is intentionally STATIC (schema is built once per pod, not per
+ * field instance, and carries no field value). It renders a container that the
+ * client-side script (ui/js/repeater.js) fills with the actual sub-field
+ * manager UI when the field dialog opens (it reads the repeater_sub_fields
+ * textarea, shows a row list with add/edit/remove, and writes changes back
+ * into that textarea, which is saved to post meta as before).
+ *
+ * @param array                 $type_options Additional field type options (repeater).
+ * @param string                $type         Field type.
+ * @param array                 $options      Tabs, indexed by label.
+ * @param null|Pods\Whatsit\Pod $pod          Pods object.
+ *
+ * @return array
+ */
+function pods_repeater_add_subfield_editor_option( $type_options, $type, $options, $pod ) {
+	if ( 'repeater' !== $type ) {
+		return $type_options;
+	}
+
+	// Static container; ui/js/repeater.js renders the manager UI into it.
+	$type_options['repeater_sub_fields_editor'] = array(
+		'name'         => 'repeater_sub_fields_editor',
+		'label'        => __( 'Sub-Fields', 'pods-repeater' ),
+		'help'         => __( 'Manage the sub-fields of this repeater group.', 'pods-repeater' ),
+		'type'         => 'html',
+		'html_content' => '<div id="pods-repeater-subfield-editor" class="pods-repeater-subfield-editor" data-editor="1"><p class="description">' . esc_html__( 'Sub-field editor loads when this dialog opens.', 'pods-repeater' ) . '</p></div>',
+		'html_wpautop' => 0,
+	);
+
+	return $type_options;
+}
+add_filter( 'pods_admin_setup_edit_repeater_additional_field_options', 'pods_repeater_add_subfield_editor_option', 10, 4 );
+
+/**
  * Translations laden (Text Domain 'pods-repeater').
  *
  * Gebündelte .mo-Dateien liegen in /languages (siehe Domain-Path-Header);
