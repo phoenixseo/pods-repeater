@@ -169,8 +169,15 @@ function pods_repeater_screen_hosts_forms( $screen ) {
 		return false;
 	}
 
-	// Pods admin (UI / Settings / editor pages): parent base is 'pods'.
-	if ( 'pods' === $screen->parent_base ) {
+	// Pods admin (UI / Settings / editor pages). Pods registers its admin
+	// pages as a top-level menu with sub-pages; on those screens WP_Screen's
+	// parent_base is NULL (the page IS the top level), so checking the
+	// request's 'page' parameter (set by add_menu_page/add_submenu_page
+	// handling) is the reliable marker — covers page=pods (list), action=edit
+	// (field editor, hosts the repeater options dialog) and settings.
+	// Read-only screen detection: no state change, so no nonce required.
+	$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+	if ( 'pods' === $page ) {
 		return true;
 	}
 
