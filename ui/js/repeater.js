@@ -173,6 +173,42 @@
 		{ key: 'type', label: 'Type', type: 'select' },
 		{ key: 'label', label: 'Label', placeholder: 'My Field' }
 	];
+	// Verifizierte Wirk-Matrix (2026-09-07, Spike tests/spike-subfield-option-verify.php
+	// gegen die echte Pipeline render_sub_field_input()/render_sub_field_pick()):
+	// placeholder greift bei allen Text-ähnlichen; maxlength zusätzlich bei text/
+	// paragraph/code/slug/password/email; pick liest data/pick_format_type/
+	// pick_format_type_single; default ist ein NO-OP (Server füllt nur Row-Werte)
+	// und wird deshalb NICHT angeboten. 'required' wirkt in validate().
+	// Nur wirksame Optionen werden angeboten.
+	const SUBFIELD_CONFIG_OPTIONS = {
+		text: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		paragraph: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		code: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		slug: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		password: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		website: { placeholder: 'Placeholder' },
+		email: { placeholder: 'Placeholder', maxlength: 'Max length' },
+		phone: { placeholder: 'Placeholder' },
+		currency: { placeholder: 'Placeholder' },
+		number: { placeholder: 'Placeholder' },
+		oembed: { placeholder: 'Placeholder' },
+		date: { placeholder: 'Placeholder' },
+		time: { placeholder: 'Placeholder' },
+		datetime: { placeholder: 'Placeholder' },
+		color: { placeholder: 'Placeholder' }
+	};
+	// Welche Typen wählen ein mehrzeiliges Eingabefeld (paragraph/code → textarea,
+	// wysiwyg wird über eine eigene Konfigoption gesteuert, kein maxlength-Attribut).
+	const SUBFIELD_TEXTAREA_TYPES = ['paragraph', 'code'];
+	// Pick-spezifische Konfiguration (eigener Server-Renderzweig):
+	// data (Optionsliste), Format single/multi, bei single zusätzlich dropdown/radio.
+	const SUBFIELD_PICK_OPTION_FIELDS = [
+		{ key: 'pick_format_type', label: 'Format', type: 'select', options: {
+			single: 'Single select', multi: 'Multiple (checkboxes)' } },
+		{ key: 'pick_format_type_single', label: 'Single format', type: 'select', options: {
+			dropdown: 'Dropdown', radio: 'Radio buttons' } }
+	];
+	const SUBFIELD_PICK_OPTION_SINGLE_ONLY = ['pick_format_type_single'];
 
 	function getSubfieldEditorContainer() {
 		return document.getElementById('pods-repeater-subfield-editor');
@@ -215,10 +251,10 @@
 
 	function renderSubfieldEditor(container, textarea) {
 		const subfields = parseSubfields(textarea.value);
-		container.innerHTML = '';
+		container.textContent = ''; // safe: only removes children
 
 		// All content below is built via createElement/textContent only;
-		// innerHTML is used solely to clear the container (''), never with
+		// the container is cleared with textContent (''), never with
 		// user-supplied HTML — no XSS surface.
 		var list = document.createElement('div');
 		list.className = 'pods-repeater-subfield-list';
@@ -302,9 +338,243 @@
 		});
 	}
 
+	/**
+	 * Parse a pick option list. Sub-field pick options are stored as a flat
+	 * object { value: label } in the sub-field definition (Pods server side
+	 * expects exactly that). The form edits them as an ordered list of
+	 * "value|label" lines; convert in both directions on open/save.
+	 *
+	 * @param {Object|string|Array} data Stored pick data.
+	 * @return {Object} {value: label}
+	 */
+	function normalizePickData(data) {
+		if (!data) {
+			return {};
+		}
+		if (typeof data === 'string') {
+			// Kompatibilität: JSON-String (aus Alt-Daten oder direktem Textarea-Edit).
+			try {
+				const parsed = JSON.parse(data);
+				return normalizePickData(parsed);
+			} catch (e) {
+				return {};
+			}
+		}
+		if (Array.isArray(data)) {
+			// Numerisches Array [v1, v2] → value === label.
+			var out = {};
+			data.forEach(function (item) {
+				if (item && typeof item === 'object' && item.value !== undefined) {
+					out[String(item.value)] = item.label !== undefined ? String(item.label) : String(item.value);
+				} else if (item !== null && item !== undefined) {
+					out[String(item)] = String(item);
+				}
+			});
+			return out;
+		}
+		if (typeof data === 'object') {
+			var res = {};
+			Object.keys(data).forEach(function (k) {
+				var v = data[k];
+				res[String(k)] = v === null || v === undefined ? String(k) : String(v);
+			});
+			return res;
+		}
+		return {};
+	}
+
+	/**
+	 * Parse a "value|label" textarea into an ordered {value: label} object.
+	 * Lines without '|' become value === label.
+	 *
+	 * @param {string} text Raw lines.
+	 * @return {Object}
+	 */
+	function parseOptionLines(text) {
+		var out = {};
+		(text || '').split('\n').forEach(function (line) {
+			line = line.trim();
+			if (!line) {
+				return;
+			}
+			var pipe = line.indexOf('|');
+			if (pipe === -1) {
+				out[line] = line;
+			} else {
+				var value = line.slice(0, pipe).trim();
+				var label = line.slice(pipe + 1).trim();
+				if (value !== '') {
+					out[value] = label !== '' ? label : value;
+				}
+			}
+		});
+		return out;
+	}
+
+	/**
+	 * Serialize an {value: label} object back to lines for the editor textarea.
+	 *
+	 * @param {Object} data
+	 * @return {string} One "value|label" per line.
+	 */
+	function optionLinesText(data) {
+		var obj = normalizePickData(data);
+		return Object.keys(obj).map(function (k) {
+			var v = obj[k];
+			return (v === String(k) ? k : k + '|' + v);
+		}).join('\n');
+	}
+
+	/**
+	 * Build the dynamic, type-specific option fields for the sub-field form.
+	 *
+	 * Rebuild model: renderExtras() calls this fresh on every type change,
+	 * so the returned container holds exactly the option controls of the
+	 * currently selected type (pre-set from the mutable draft). No CSS
+	 * show/hide layer needed.
+	 *
+	 * @param {string} type  Sub-field type.
+	 * @param {Object} draft Mutable draft of the edited sub-field.
+	 * @return {Object} { container, out } with out: key → { wrapper, input }.
+	 */
+function buildTypeFields(type, draft) {
+	var container = document.createElement('div');
+	container.className = 'pods-repeater-subfield-extra';
+
+	var out = {};
+
+	var addText = function (key, labelText, placeholder) {
+			var wrapper = document.createElement('label');
+			wrapper.className = 'pods-repeater-subfield-config';
+			wrapper.dataset.opt = key;
+
+			var labelEl = document.createElement('span');
+			labelEl.textContent = labelText + ':';
+			wrapper.appendChild(labelEl);
+
+			var input = document.createElement('input');
+			input.type = 'text';
+			input.className = 'pods-repeater-subfield-input';
+			input.name = 'subfield_' + key;
+			if (placeholder) {
+				input.placeholder = placeholder;
+			}
+			wrapper.appendChild(input);
+
+			container.appendChild(wrapper);
+			out[key] = { wrapper: wrapper, input: input };
+			return input;
+		};
+
+		var addSelect = function (key, labelText, options) {
+			var wrapper = document.createElement('label');
+			wrapper.className = 'pods-repeater-subfield-config';
+			wrapper.dataset.opt = key;
+
+			var labelEl = document.createElement('span');
+			labelEl.textContent = labelText + ':';
+			wrapper.appendChild(labelEl);
+
+			var input = document.createElement('select');
+			input.className = 'pods-repeater-subfield-input';
+			input.name = 'subfield_' + key;
+			Object.keys(options).forEach(function (val) {
+				var opt = document.createElement('option');
+				opt.value = val;
+				opt.textContent = options[val];
+				input.appendChild(opt);
+			});
+			wrapper.appendChild(input);
+
+			container.appendChild(wrapper);
+			out[key] = { wrapper: wrapper, input: input };
+			return input;
+		};
+
+		// -- Required (alle Nicht-Display-Typen, wirkt in validate()). --
+		if (SUBFIELD_DISPLAY_TYPES.indexOf(type) === -1) {
+			var reqWrap = document.createElement('label');
+			reqWrap.className = 'pods-repeater-subfield-config';
+			reqWrap.dataset.opt = 'required';
+
+			var reqInput = document.createElement('input');
+			reqInput.type = 'checkbox';
+			reqInput.className = 'pods-repeater-subfield-input';
+			reqInput.name = 'subfield_required';
+			reqInput.checked = !!(draft && draft.required);
+			reqWrap.appendChild(reqInput);
+
+			var reqLabelEl = document.createElement('span');
+			reqLabelEl.textContent = 'Required (in every row)';
+			reqWrap.appendChild(reqLabelEl);
+
+			container.appendChild(reqWrap);
+			out.required = { wrapper: reqWrap, input: reqInput };
+		}
+
+		// -- pick: Format-Wahl (single/multi) + bei single dropdown/radio. --
+		if (type === 'pick') {
+			SUBFIELD_PICK_OPTION_FIELDS.forEach(function (def) {
+				var input = addSelect(def.key, def.label, def.options);
+				if (draft && draft[def.key] !== undefined) {
+					input.value = draft[def.key];
+				}
+			});
+		}
+
+		// -- Textähnliche Basis-Typen: placeholder + ggf. maxlength. --
+		var cfg = SUBFIELD_CONFIG_OPTIONS[type];
+		if (cfg) {
+			Object.keys(cfg).forEach(function (key) {
+				var labelText = cfg[key];
+				var ph = (key === 'placeholder') ? (type === 'website' ? 'https://' : '') : '';
+				var input = addText(key, labelText, ph);
+				if (draft && draft[key] !== undefined) {
+					input.value = draft[key];
+				}
+			});
+		}
+
+		// -- pick: Optionsliste (data) als "value|label"-Zeilen. --
+		if (type === 'pick') {
+			var wrap = document.createElement('label');
+			wrap.className = 'pods-repeater-subfield-config pods-repeater-subfield-data';
+			wrap.dataset.opt = 'data';
+			var labelEl = document.createElement('span');
+			labelEl.textContent = 'Options:';
+			wrap.appendChild(labelEl);
+			var ta = document.createElement('textarea');
+			ta.className = 'pods-repeater-subfield-input';
+			ta.name = 'subfield_data';
+			ta.rows = 4;
+			ta.placeholder = 'value|Label\n1|Option one\n2|Option two';
+			if (draft) {
+				ta.value = optionLinesText(draft.data);
+			}
+			wrap.appendChild(ta);
+			var help = document.createElement('span');
+			help.className = 'description';
+			help.textContent = 'One per line: value|Label (value only = same label).';
+			wrap.appendChild(help);
+			container.appendChild(wrap);
+			out.data = { wrapper: wrap, input: ta };
+		}
+
+		// Display-Typen (heading/html): nur die Required-Checkbox fehlt oben
+		// bereits per Bedingung — hier ist nichts weiter zu tun.
+
+		return { container: container, out: out };
+	}
+
 	function openSubfieldForm(container, textarea, sub, all, editIndex) {
 		// Hide the list, show the (single) editor form in the same container.
-		container.innerHTML = '';
+		container.textContent = ''; // safe: only removes children
+
+		// Mutable draft of the definition being edited. buildTypeFields() fills
+		// a fresh options container from it; doSave() merges the controls back
+		// into it. Kept independent of the textarea until Save so Cancel really
+		// discards and switching type never corrupts the stored JSON.
+		var draft = sub ? JSON.parse(JSON.stringify(sub)) : {};
 
 		var form = document.createElement('div');
 		form.className = 'pods-repeater-subfield-form';
@@ -312,6 +582,13 @@
 		var title = document.createElement('h4');
 		title.textContent = sub ? 'Edit sub-field' : 'Add sub-field';
 		form.appendChild(title);
+
+		// Type-specific options (placeholder/maxlength/required, pick data +
+		// formats) live in their own container, rendered by buildTypeFields()
+		// and re-rendered on every type change. Holds only the controls of the
+		// current type — no show/hide CSS needed.
+		var extras = document.createElement('div');
+		extras.className = 'pods-repeater-subfield-extras';
 
 		var fields = {};
 		SUBFIELD_DEFAULT_FIELDS.forEach(function (def) {
@@ -327,8 +604,10 @@
 					opt.textContent = subfieldTypeLabel(type);
 					input.appendChild(opt);
 				});
-				if (sub) {
-					input.value = sub.type || 'text';
+				if (sub && sub.type) {
+					input.value = sub.type;
+				} else {
+					input.value = 'text'; // sensible default for "Add"
 				}
 			} else {
 				input = document.createElement('input');
@@ -344,6 +623,50 @@
 			fields[def.key] = input;
 			form.appendChild(labelEl);
 		});
+
+		form.appendChild(extras);
+
+		// Render (and re-render on type change) the type-specific options.
+		// Before rebuilding, harvest the visible controls' values into the
+		// draft so a type switch does not lose what was already typed.
+		var renderExtras = function () {
+			var built = buildTypeFields(fields.type ? fields.type.value : 'text', draft);
+			extras.textContent = ''; // safe: only removes children
+			extras.appendChild(built.container);
+		};
+
+		var harvestExtras = function () {
+			// Only the currently visible controls exist in the DOM; the
+			// draft keeps values of previously shown types. Read every
+			// control and write it into the draft.
+			extras.querySelectorAll('input[name^="subfield_"], select[name^="subfield_"], textarea[name^="subfield_"]').forEach(function (el) {
+				var key = el.name.slice('subfield_'.length);
+				var val;
+				if (el.type === 'checkbox') {
+					val = el.checked;
+				} else if (el.type === 'select-multiple') {
+					val = Array.prototype.filter.call(el.options, function (o) { return o.selected; })
+						.map(function (o) { return o.value; });
+				} else if (el.tagName === 'TEXTAREA' && key === 'data') {
+					// Pick option list: raw "value|Label" lines → {value:label}
+					// object right away, so draft.data stays a plain object
+					// (the server-side expected shape) across type switches.
+					val = parseOptionLines(el.value);
+				} else {
+					val = el.value;
+				}
+				draft[key] = val;
+			});
+		};
+
+		var typeSelect = fields.type;
+		if (typeSelect) {
+			typeSelect.addEventListener('change', function () {
+				harvestExtras();
+				renderExtras();
+			});
+		}
+		renderExtras();
 
 		var hint = document.createElement('p');
 		hint.className = 'description';
@@ -380,10 +703,53 @@
 				fields.name.focus();
 				return;
 			}
+			harvestExtras();
 			var entry = { name: name, type: type };
 			if (label) {
 				entry.label = label;
 			}
+			// Merge the harvested type-specific options into the entry, but
+			// only those that apply to the CURRENT type (SUBFIELD_CONFIG_OPTIONS
+			// + required, or the pick options for pick). Values left over in
+			// the draft from a previously selected type are dropped, so a
+			// type switch never leaks stale options into the stored JSON.
+			var OPTION_SKIP_EMPTY = { placeholder: 1, maxlength: 1 };
+			var allowed = {};
+			if (type === 'pick') {
+				SUBFIELD_PICK_OPTION_FIELDS.forEach(function (def) { allowed[def.key] = 1; });
+				allowed.data = 1;
+			} else {
+				var cfg = SUBFIELD_CONFIG_OPTIONS[type] || {};
+				Object.keys(cfg).forEach(function (key) { allowed[key] = 1; });
+			}
+			allowed.required = 1;
+			Object.keys(draft).forEach(function (key) {
+				var val = draft[key];
+				if (!allowed[key]) {
+					return; // not applicable to the current type
+				}
+				if (key === 'name' || key === 'type' || key === 'label') {
+					return; // core keys handled above
+				}
+				if (typeof val === 'string' && OPTION_SKIP_EMPTY[key] && val.trim() === '') {
+					return; // don't store empty placeholder/maxlength
+				}
+				if (key === 'required' && !val) {
+					return; // unchecked → omit (server treats absent as false)
+				}
+				if (key === 'data') {
+					// draft.data is already a {value:label} object (harvest
+					// parses the textarea); store it only when non-empty.
+					if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+						entry.data = val;
+					}
+					return;
+				}
+				if (val === '') {
+					return; // skip empty generic string options
+				}
+				entry[key] = val;
+			});
 			var next = all.slice();
 			if (typeof editIndex === 'number' && editIndex >= 0 && editIndex < next.length) {
 				next[editIndex] = entry;
