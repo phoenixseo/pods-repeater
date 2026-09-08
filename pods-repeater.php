@@ -38,7 +38,7 @@ function pods_repeater_init() {
 
 	// Register the 'repeater' field type. The class file is loaded via the
 	// pods_form_field_include filter (see field_loader()).
-	PodsForm::register_field_type( 'repeater', PODS_REPEATER_DIR . 'classes/field-repeater.php' );
+	PodsForm::register_field_type( 'repeater', PODS_REPEATER_DIR . 'classes/fields/repeater.php' );
 
 	// Pods loads field types lazily (first field render). If a field_loader()
 	// call for 'repeater' happened before this file was included (e.g. a Pod
@@ -48,11 +48,11 @@ function pods_repeater_init() {
 	// force $loaded['repeater'] to it — field_loader()'s early return (see
 	// PodsForm.php field_loader()) would otherwise keep serving the base class.
 	if ( ! class_exists( 'PodsField_Repeater' ) ) {
-		include_once PODS_REPEATER_DIR . 'classes/field-repeater.php';
+		include_once PODS_REPEATER_DIR . 'classes/fields/repeater.php';
 	}
 
 	if ( class_exists( 'PodsField_Repeater' ) ) {
-		$loaded = PodsForm::field_loader( 'repeater', PODS_REPEATER_DIR . 'classes/field-repeater.php' );
+		$loaded = PodsForm::field_loader( 'repeater', PODS_REPEATER_DIR . 'classes/fields/repeater.php' );
 
 		if ( ! $loaded instanceof PodsField_Repeater ) {
 			// Replace the cached base-class instance with the real field class.
