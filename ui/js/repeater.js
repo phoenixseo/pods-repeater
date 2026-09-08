@@ -174,29 +174,201 @@
 		{ key: 'label', label: 'Label', placeholder: 'My Field' }
 	];
 	// Verifizierte Wirk-Matrix (2026-09-07, Spike tests/spike-subfield-option-verify.php
-	// gegen die echte Pipeline render_sub_field_input()/render_sub_field_pick()):
+	// gegen die echte Pipeline render_sub_field_input()/render_sub_field_pick();
+	// erweitert 2026-09-08 per tests/spike-option-verify-extended.php):
 	// placeholder greift bei allen Text-ähnlichen; maxlength zusätzlich bei text/
 	// paragraph/code/slug/password/email; pick liest data/pick_format_type/
 	// pick_format_type_single; default ist ein NO-OP (Server füllt nur Row-Werte)
 	// und wird deshalb NICHT angeboten. 'required' wirkt in validate().
-	// Nur wirksame Optionen werden angeboten.
+	// Seit dem Server-Fix (generische Durchreichung der Sub-Options) wirken auch
+	// die präfixierten Feldtyp-Optionen.
+	// Alle Keys stammen aus Pods options() (classes/fields/*.php, verifiziert
+	// 2026-09-08); UI-Labels sind Kurzformen. Nur wirksame Optionen werden angeboten.
+	//
+	// Format der Einträge:
+	//   'key'            => gespeicherter Options-Key (mit Typ-Präfix)
+	//   { label, type: 'select', options: {value: Label}, placeholder? }
+	//   { label, type: 'text'|'number', placeholder? }
+	//   { label, type: 'checkbox' }  (checked = 1)
 	const SUBFIELD_CONFIG_OPTIONS = {
-		text: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		paragraph: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		code: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		slug: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		password: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		website: { placeholder: 'Placeholder' },
-		email: { placeholder: 'Placeholder', maxlength: 'Max length' },
-		phone: { placeholder: 'Placeholder' },
-		currency: { placeholder: 'Placeholder' },
-		number: { placeholder: 'Placeholder' },
-		oembed: { placeholder: 'Placeholder' },
-		date: { placeholder: 'Placeholder' },
-		time: { placeholder: 'Placeholder' },
-		datetime: { placeholder: 'Placeholder' },
-		color: { placeholder: 'Placeholder' }
+		text: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		paragraph: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		code: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		slug: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		password: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		website: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			website_format: { label: 'Format', type: 'select', options: {
+				normal: 'https://example.com/',
+				'no-www': 'Remove www',
+				'force-www': 'Force www',
+				'no-http': 'example.com',
+				'no-http-no-www': 'example.com (no www)',
+				'no-http-force-www': 'www.example.com',
+				none: 'No format' } },
+			website_allow_port: { label: 'Allow port in URL', type: 'checkbox' },
+			website_clickable: { label: 'Output as link', type: 'checkbox' },
+			website_new_window: { label: 'Open in new window', type: 'checkbox' },
+			website_nofollow: { label: 'Add nofollow', type: 'checkbox' },
+			website_max_length: { label: 'Max length (-1 = no limit)', type: 'number' }
+		},
+		email: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			maxlength: { label: 'Max length', type: 'number' }
+		},
+		phone: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			phone_format: { label: 'Format', type: 'select', options: {
+				'999-999-9999 x999': '123-456-7890 x123',
+				'(999) 999-9999 x999': '(123) 456-7890 x123',
+				'999.999.9999 x999': '123.456.7890 x123',
+				international: 'International (any)' } },
+			phone_max_length: { label: 'Max length (-1 = no limit)', type: 'number' }
+		},
+		currency: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			currency_format_type: { label: 'Input type', type: 'select', options: {
+				number: 'Freeform number', slider: 'Slider' } },
+			currency_format_sign: { label: 'Currency', type: 'select', options: {
+				aud: 'AUD ($)', brl: 'BRL (R$)', cad: 'CAD ($)', chf: 'CHF', cny: 'CNY (¥)',
+				czk: 'CZK (Kč)', dkk: 'DKK (kr)', eur: 'EUR (€)', gbp: 'GBP (£)',
+				hkd: 'HKD ($)', huf: 'HUF (Ft)', idr: 'IDR (Rp)', ils: 'ILS (₪)',
+				inr: 'INR (₹)', jpy: 'JPY (¥)', krw: 'KRW (₩)', mxn: 'MXN ($)',
+				myr: 'MYR (RM)', ngn: 'NGN (₦)', nok: 'NOK (kr)', nzd: 'NZD ($)',
+				php: 'PHP (₱)', pln: 'PLN (zł)', rub: 'RUB (₽)', sek: 'SEK (kr)',
+				sgd: 'SGD ($)', thb: 'THB (฿)', twd: 'TWD (NT$)', usd: 'USD ($)',
+				usdcent: 'US Cent (¢)', vnd: 'VND (₫)', zar: 'ZAR (R)' } },
+			currency_format_placement: { label: 'Placement', type: 'select', options: {
+				before: 'Before ($100)', after: 'After (100$)',
+				before_space: 'Before with space ($ 100)', after_space: 'After with space (100 $)',
+				none: 'None (100)', beforeaftercode: 'Before, code after ($100 USD)',
+				beforeaftercode_space: 'Before w/ space, code after ($ 100 USD)' } },
+			currency_format: { label: 'Number format', type: 'select', options: {
+				i18n: 'Localized default', '9,999.99': '1,234.00', '9999.99': '1234.00',
+				'9.999,99': '1.234,00', '9999,99': '1234,00', '9 999,99': '1 234,00',
+				"9'999.99": "1'234.00" } },
+			currency_decimals: { label: 'Decimals', type: 'number' },
+			currency_decimal_handling: { label: 'Decimal handling', type: 'select', options: {
+				none: 'Default (1.00, 0.00)', remove: 'Remove (1, 0)',
+				remove_only_zero: 'Remove only when zero (1.00, 0)',
+				dash: 'To dash (1.-, 0.-)', dash_only_zero: 'Dash only when zero (1.00, 0.-)',
+				dash_whole_zero: 'Whole value to dash (1.00, -)' } }
+		},
+		number: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			number_format_type: { label: 'Input type', type: 'select', options: {
+				number: 'Freeform number', slider: 'Slider' } },
+			number_format: { label: 'Number format', type: 'select', options: {
+				i18n: 'Localized default', '9,999.99': '1,234.00', '9999.99': '1234.00',
+				'9.999,99': '1.234,00', '9999,99': '1234,00', '9 999,99': '1 234,00',
+				"9'999.99": "1'234.00" } },
+			number_decimals: { label: 'Decimals', type: 'number' },
+			number_decimal_handling: { label: 'Decimal handling', type: 'select', options: {
+				none: 'Default (1.00, 0.00)', remove: 'Remove (1, 0)',
+				remove_only_zero: 'Remove only when zero (1.00, 0)',
+				dash: 'To dash (1.-, 0.-)', dash_only_zero: 'Dash only when zero (1.00, 0.-)',
+				dash_whole_zero: 'Whole value to dash (1.00, -)' } },
+			number_step: { label: 'Slider step', type: 'text' },
+			number_min: { label: 'Minimum', type: 'text' },
+			number_max: { label: 'Maximum', type: 'text' },
+			number_max_length: { label: 'Max digits', type: 'number' }
+		},
+		oembed: {
+			placeholder: { label: 'Placeholder', type: 'text' },
+			oembed_width: { label: 'Embed width (0 = none)', type: 'number' },
+			oembed_height: { label: 'Embed height (0 = none)', type: 'number' },
+			oembed_show_preview: { label: 'Show preview', type: 'checkbox' },
+			oembed_restrict_providers: { label: 'Restrict to providers', type: 'checkbox' }
+		},
+		date: {
+			date_type: { label: 'Date format type', type: 'select', options: {
+				wp: 'WordPress default', format: 'Predefined format', custom: 'Custom format' } },
+			date_format_custom: { label: 'Date format for display (PHP)', type: 'text' },
+			date_format_custom_js: { label: 'Date format for input (jQuery UI)', type: 'text' },
+			date_format: { label: 'Date format', type: 'select', options: {
+				mdy: 'm/d/Y', mdy_dash: 'm-d-Y', mdy_dot: 'm.d.Y',
+				ymd_slash: 'Y/m/d', ymd_dash: 'Y-m-d', ymd_dot: 'Y.m.d',
+				fjy: 'F j, Y', fjsy: 'F jS, Y', y: 'Y' } },
+			date_year_range_custom: { label: 'Year range (e.g. -10:+10)', type: 'text' },
+			date_allow_empty: { label: 'Allow empty value', type: 'checkbox' }
+		},
+		time: {
+			time_type: { label: 'Time format type', type: 'select', options: {
+				wp: 'WordPress default', '12': '12 hour', '24': '24 hour', custom: 'Custom format' } },
+			time_format_custom: { label: 'Time format for display (PHP)', type: 'text' },
+			time_format_custom_js: { label: 'Time format for input (jQuery UI)', type: 'text' },
+			time_format: { label: 'Time format (12h)', type: 'select', options: {
+				h_mm_A: 'g:i A', h_mm_ss_A: 'g:i:s A', hh_mm_A: 'h:i A', hh_mm_ss_A: 'h:i:s A',
+				h_mma: 'g:ia', hh_mma: 'h:ia', h_mm: 'g:i', h_mm_ss: 'g:i:s', hh_mm: 'h:i', hh_mm_ss: 'h:i:s' } },
+			time_format_24: { label: 'Time format (24h)', type: 'select', options: {
+				hh_mm: 'H:i', hh_mm_ss: 'H:i:s' } },
+			time_allow_empty: { label: 'Allow empty value', type: 'checkbox' }
+		},
+		datetime: {
+			datetime_type: { label: 'Date format type', type: 'select', options: {
+				wp: 'WordPress default', format: 'Predefined format', custom: 'Custom format' } },
+			datetime_format_custom: { label: 'Date format for display (PHP)', type: 'text' },
+			datetime_format_custom_js: { label: 'Date format for input (jQuery UI)', type: 'text' },
+			datetime_format: { label: 'Date format', type: 'select', options: {
+				mdy: 'm/d/Y', mdy_dash: 'm-d-Y', mdy_dot: 'm.d.Y',
+				ymd_slash: 'Y/m/d', ymd_dash: 'Y-m-d', ymd_dot: 'Y.m.d',
+				fjy: 'F j, Y', fjsy: 'F jS, Y', c: 'ISO 8601' } },
+			datetime_time_type: { label: 'Time format type', type: 'select', options: {
+				wp: 'WordPress default', '12': '12 hour', '24': '24 hour', custom: 'Custom format' } },
+			datetime_time_format_custom: { label: 'Time format for display (PHP)', type: 'text' },
+			datetime_time_format_custom_js: { label: 'Time format for input (jQuery UI)', type: 'text' },
+			datetime_time_format: { label: 'Time format (12h)', type: 'select', options: {
+				h_mm_A: 'g:i A', h_mm_ss_A: 'g:i:s A', hh_mm_A: 'h:i A', hh_mm_ss_A: 'h:i:s A',
+				h_mma: 'g:ia', hh_mma: 'h:ia', h_mm: 'g:i', h_mm_ss: 'g:i:s', hh_mm: 'h:i', hh_mm_ss: 'h:i:s' } },
+			datetime_time_format_24: { label: 'Time format (24h)', type: 'select', options: {
+				hh_mm: 'H:i', hh_mm_ss: 'H:i:s' } },
+			datetime_year_range_custom: { label: 'Year range (e.g. -10:+10)', type: 'text' },
+			datetime_allow_empty: { label: 'Allow empty value', type: 'checkbox' }
+		},
+		color: {
+			color_select_label: { label: 'Select color label', type: 'text', placeholder: 'Select Color' },
+			color_clear_label: { label: 'Clear label', type: 'text', placeholder: 'Clear' }
+		},
+		boolean: {
+			boolean_format_type: { label: 'Input type', type: 'select', options: {
+				checkbox: 'Checkbox', radio: 'Radio buttons', dropdown: 'Drop down' } },
+			boolean_yes_label: { label: 'Yes label', type: 'text', placeholder: 'Yes' },
+			boolean_no_label: { label: 'No label', type: 'text', placeholder: 'No' }
+		},
+		wysiwyg: {
+			wysiwyg_editor: { label: 'Editor', type: 'select', options: {
+				tinymce: 'TinyMCE (WP default)', quill: 'Quill', cleditor: 'CLEditor (fallback: Quill)' } },
+			wysiwyg_editor_height: { label: 'Editor height (px)', type: 'number' },
+			wysiwyg_media_buttons: { label: 'Enable media buttons', type: 'checkbox' },
+			wysiwyg_delay_init: { label: 'Delay TinyMCE init', type: 'checkbox' },
+			wysiwyg_trim: { label: 'Trim extra whitespace', type: 'checkbox' },
+			wysiwyg_trim_lines: { label: 'Trim whitespace at line ends', type: 'checkbox' },
+			wysiwyg_trim_p_brs: { label: 'Remove blank lines / empty p / br', type: 'checkbox' },
+			wysiwyg_trim_extra_lines: { label: 'Remove extra blank lines', type: 'checkbox' },
+			wysiwyg_sanitize_html: { label: 'Sanitize HTML', type: 'checkbox' },
+			wysiwyg_oembed: { label: 'Enable oEmbed', type: 'checkbox' },
+			wysiwyg_wptexturize: { label: 'Enable wptexturize', type: 'checkbox' },
+			wysiwyg_convert_chars: { label: 'Enable convert_chars', type: 'checkbox' },
+			wysiwyg_wpautop: { label: 'Enable wpautop', type: 'checkbox' }
+		}
 	};
+	// Generische (nicht-pick) Typschlüssel, die Konfiguration anbieten.
+	const SUBFIELD_CONFIG_TYPES = Object.keys(SUBFIELD_CONFIG_OPTIONS);
 	// Welche Typen wählen ein mehrzeiliges Eingabefeld (paragraph/code → textarea,
 	// wysiwyg wird über eine eigene Konfigoption gesteuert, kein maxlength-Attribut).
 	const SUBFIELD_TEXTAREA_TYPES = ['paragraph', 'code'];
@@ -443,43 +615,63 @@ function buildTypeFields(type, draft) {
 
 	var out = {};
 
-	var addText = function (key, labelText, placeholder) {
-			var wrapper = document.createElement('label');
-			wrapper.className = 'pods-repeater-subfield-config';
-			wrapper.dataset.opt = key;
+	var addText = function (key, labelText, placeholder, inputType) {
+		var wrapper = document.createElement('label');
+		wrapper.className = 'pods-repeater-subfield-config';
+		wrapper.dataset.opt = key;
 
-			var labelEl = document.createElement('span');
-			labelEl.textContent = labelText + ':';
-			wrapper.appendChild(labelEl);
+		var labelEl = document.createElement('span');
+		labelEl.textContent = labelText + ':';
+		wrapper.appendChild(labelEl);
 
-			var input = document.createElement('input');
-			input.type = 'text';
-			input.className = 'pods-repeater-subfield-input';
-			input.name = 'subfield_' + key;
-			if (placeholder) {
-				input.placeholder = placeholder;
-			}
-			wrapper.appendChild(input);
+		var input = document.createElement('input');
+		input.type = inputType || 'text';
+		input.className = 'pods-repeater-subfield-input';
+		input.name = 'subfield_' + key;
+		if (placeholder) {
+			input.placeholder = placeholder;
+		}
+		wrapper.appendChild(input);
 
-			container.appendChild(wrapper);
-			out[key] = { wrapper: wrapper, input: input };
-			return input;
-		};
+		container.appendChild(wrapper);
+		out[key] = { wrapper: wrapper, input: input };
+		return input;
+	};
 
-		var addSelect = function (key, labelText, options) {
-			var wrapper = document.createElement('label');
-			wrapper.className = 'pods-repeater-subfield-config';
-			wrapper.dataset.opt = key;
+	var addCheckbox = function (key, labelText) {
+		var wrapper = document.createElement('label');
+		wrapper.className = 'pods-repeater-subfield-config';
+		wrapper.dataset.opt = key;
 
-			var labelEl = document.createElement('span');
-			labelEl.textContent = labelText + ':';
-			wrapper.appendChild(labelEl);
+		var input = document.createElement('input');
+		input.type = 'checkbox';
+		input.className = 'pods-repeater-subfield-input';
+		input.name = 'subfield_' + key;
 
-			var input = document.createElement('select');
-			input.className = 'pods-repeater-subfield-input';
-			input.name = 'subfield_' + key;
-			Object.keys(options).forEach(function (val) {
-				var opt = document.createElement('option');
+		var labelEl = document.createElement('span');
+		labelEl.textContent = labelText;
+		wrapper.appendChild(input);
+		wrapper.appendChild(labelEl);
+
+		container.appendChild(wrapper);
+		out[key] = { wrapper: wrapper, input: input };
+		return input;
+	};
+
+	var addSelect = function (key, labelText, options) {
+		var wrapper = document.createElement('label');
+		wrapper.className = 'pods-repeater-subfield-config';
+		wrapper.dataset.opt = key;
+
+		var labelEl = document.createElement('span');
+		labelEl.textContent = labelText + ':';
+		wrapper.appendChild(labelEl);
+
+		var input = document.createElement('select');
+		input.className = 'pods-repeater-subfield-input';
+		input.name = 'subfield_' + key;
+		Object.keys(options).forEach(function (val) {
+			var opt = document.createElement('option');
 				opt.value = val;
 				opt.textContent = options[val];
 				input.appendChild(opt);
@@ -522,14 +714,34 @@ function buildTypeFields(type, draft) {
 			});
 		}
 
-		// -- Textähnliche Basis-Typen: placeholder + ggf. maxlength. --
+		// -- Typspezifische Konfiguration aus SUBFIELD_CONFIG_OPTIONS
+		// (deklarativ): text/number → input, select → Dropdown,
+		// checkbox → Checkbox (harvest liest checked). --
 		var cfg = SUBFIELD_CONFIG_OPTIONS[type];
 		if (cfg) {
 			Object.keys(cfg).forEach(function (key) {
-				var labelText = cfg[key];
-				var ph = (key === 'placeholder') ? (type === 'website' ? 'https://' : '') : '';
-				var input = addText(key, labelText, ph);
-				if (draft && draft[key] !== undefined) {
+				var def = cfg[key];
+				var input;
+				if (def.type === 'select') {
+					input = addSelect(key, def.label, def.options);
+				} else if (def.type === 'checkbox') {
+					input = addCheckbox(key, def.label);
+					if (draft && draft[key]) {
+						input.checked = true;
+					}
+				} else if (def.type === 'number') {
+					input = addText(key, def.label, def.placeholder, 'number');
+					if (draft && draft[key] !== undefined) {
+						input.value = draft[key];
+					}
+				} else {
+					input = addText(key, def.label, def.placeholder, 'text');
+					if (draft && draft[key] !== undefined) {
+						input.value = draft[key];
+					}
+				}
+				// select-Wert aus draft nachfüllen
+				if (def.type === 'select' && draft && draft[key] !== undefined) {
 					input.value = draft[key];
 				}
 			});

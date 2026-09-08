@@ -529,12 +529,31 @@ class Pods_Repeater_Field extends PodsField {
 			),
 		);
 
-		// Typspezifische Sub-Feld-Optionen durchreichen (z. B. maxlength,
-		// format, wysiwyg_editor_height), sofern vorhanden.
-		foreach ( array( 'options', 'data', 'default', 'format', 'maxlength', 'placeholder', 'wysiwyg_editor_height', 'wysiwyg_editor' ) as $opt_key ) {
-			if ( isset( $sub[ $opt_key ] ) && ! isset( $options[ $opt_key ] ) ) {
-				$options[ $opt_key ] = $sub[ $opt_key ];
+		// Typspezifische Sub-Feld-Optionen generisch durchreichen: Die
+		// Sub-Feld-Definition (gespeichertes JSON) ist eine freie
+		// Options-Map im Pods-Sinne. Nur die Kern-Keys werden ausgenommen,
+		// die der Repeater selbst verwaltet (Name/Type/Label sind bereits
+		// oben verarbeitet; 'options' würde PodsForm-Optionen überschreiben).
+		// Dadurch wirken alle Feldtyp-Optionen (z. B. boolean_format_type,
+		// number_format, currency_format_sign, date_format, wysiwyg_editor)
+		// sowohl im Editor als auch in der display()-Pipeline.
+		$sub_option_blacklist = array(
+			'name',
+			'type',
+			'label',
+			'required', // Validierung läuft über validate(); soll nicht als PodsForm-Option wirken.
+			'name_prefix', // Von der Repeater-Pipeline hart gesetzt.
+			'disable_dfv', // Von der Repeater-Pipeline hart gesetzt (Zeilen-Input).
+			'attributes',  // Von der Repeater-Pipeline hart gesetzt (id/data-sub).
+			'options', // Kollision: wäre die Pods-Options-Map selbst.
+		);
+
+		foreach ( $sub as $opt_key => $opt_value ) {
+			if ( in_array( $opt_key, $sub_option_blacklist, true ) ) {
+				continue;
 			}
+
+			$options[ $opt_key ] = $opt_value;
 		}
 
 		try {
