@@ -25,6 +25,10 @@ define( 'PODS_REPEATER_VERSION', '0.1.0' );
 define( 'PODS_REPEATER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PODS_REPEATER_URL', plugin_dir_url( __FILE__ ) );
 
+// Feldgruppen-Registry (Datenebene + API): wiederverwendbare Gruppen aus
+// Slug, Label und geordneter Feldliste. Unabhängig von Pods ladbar.
+require_once PODS_REPEATER_DIR . 'includes/field-groups.php';
+
 /**
  * Bootstrap: register the custom field type once Pods is loaded.
  *
