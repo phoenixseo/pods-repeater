@@ -458,7 +458,7 @@ class RepeaterInputValidateTest extends WP_UnitTestCase {
 	 *
 	 * @return void
 	 */
-	public function test_validate_returns_wp_error_when_required_sub_field_missing_in_partially_filled_row() {
+	public function test_validate_reports_required_sub_field_missing_in_partially_filled_row() {
 		$partial = array(
 			array(
 				'subtitle' => '',
@@ -469,15 +469,14 @@ class RepeaterInputValidateTest extends WP_UnitTestCase {
 
 		$result = $this->field->validate( $partial, 'items', $this->options );
 
-		$this->assertInstanceOf( 'WP_Error', $result, 'Teilgefüllte Zeile ohne required-Sub-Feld muss einen WP_Error liefern.' );
-		$this->assertSame( 'pods_repeater_required', $result->get_error_code() );
-		$this->assertStringContainsString( 'Subtitle', $result->get_error_message(), 'Die Fehlermeldung muss das Label des required-Sub-Felds nennen.' );
+		$this->assertIsArray( $result, 'Teilgefüllte Zeile ohne required-Sub-Feld muss eine Meldung liefern (Pods-Vertrag: Array, kein WP_Error).' );
+		$this->assertStringContainsString( 'Subtitle', $result[0], 'Die Fehlermeldung muss das Label des required-Sub-Felds nennen.' );
 
 		// Gleiches Verhalten über den JSON-String-Pfad des Admin-Formulars.
 		$result_json = $this->field->validate( wp_json_encode( $partial ), 'items', $this->options );
 
-		$this->assertInstanceOf( 'WP_Error', $result_json );
-		$this->assertSame( 'pods_repeater_required', $result_json->get_error_code() );
+		$this->assertIsArray( $result_json );
+		$this->assertStringContainsString( 'Subtitle', $result_json[0] );
 
 		// Gegenprobe: required gesetzt → keine Fehlermeldung (kein Over-Blocking).
 		$this->assertSame(

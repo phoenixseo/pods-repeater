@@ -277,6 +277,15 @@ class PodsField_Repeater extends PodsField {
 	/**
 	 * Validate: check required sub-fields before saving.
 	 *
+	 * Rückgabe-Vertrag von Pods (siehe PodsField_Text::validate() und
+	 * PodsAPI::save_pod_item()): `true` wenn alles passt, sonst ein Array von
+	 * Fehlermeldungen (Strings). Pods' validate()-Aufrufer macht daraus
+	 * `pods_error()`. Ein WP_Error-Objekt ist hier NICHT zulässig: PodsAPI
+	 * castet das Ergebnis danach mit `(array)` und reicht die Elemente an
+	 * wp_kses_post() weiter — ein Objekt in diesem Array löst
+	 * "Array to string conversion" aus und der Save stirbt mit einem PHP-Fehler
+	 * statt mit einer Feldmeldung.
+	 *
 	 * @param mixed|null      $value   Value to validate (array of rows or JSON string).
 	 * @param string|null     $name    Field name.
 	 * @param array|null      $options Field options.
@@ -285,7 +294,7 @@ class PodsField_Repeater extends PodsField {
 	 * @param int|string|null $id      Item ID.
 	 * @param array|null      $params  Additional parameters.
 	 *
-	 * @return bool|WP_Error
+	 * @return bool|array True or list of error messages.
 	 */
 	public function validate( $value = null, $name = null, $options = null, $fields = null, $pod = null, $id = null, $params = null ) {
 		$rows = is_string( $value ) ? json_decode( $value, true ) : $value;
@@ -306,15 +315,16 @@ class PodsField_Repeater extends PodsField {
 			}
 		}
 		if ( $limit > 0 && $filled > $limit ) {
-			return new WP_Error(
-				'pods_repeater_limit_exceeded',
+			return array(
 				sprintf(
 					/* translators: %d: maximum number of rows */
 					__( 'This field allows at most %d rows.', 'pods-repeater' ),
 					$limit
-				)
+				),
 			);
 		}
+
+		$errors = array();
 
 		foreach ( $rows as $row ) {
 			// Vollständig leere Zeilen überspringen: die von input() geseedete
@@ -327,17 +337,19 @@ class PodsField_Repeater extends PodsField {
 
 			foreach ( $sub_fields as $sub ) {
 				if ( ! empty( $sub['required'] ) && empty( $row[ $sub['name'] ] ) ) {
-					return new WP_Error(
-						'pods_repeater_required',
-						sprintf(
+					$errors[] = sprintf(
 						/* translators: %s: sub-field label */
-							__( 'Field "%s" is required in every row.', 'pods-repeater' ),
-							$sub['label']
-						)
+						__( 'Field "%s" is required in every row.', 'pods-repeater' ),
+						$sub['label']
 					);
 				}
 			}
 		}
+
+		if ( ! empty( $errors ) ) {
+			return $errors;
+		}
+
 		return true;
 	}
 
@@ -838,27 +850,84 @@ class PodsField_Repeater extends PodsField {
 	/**
 	 * Normalize field options to a plain array.
 	 *
-	 * Pods übergibt Optionen mal als Array (PodsForm::options() merged Defaults
-	 * und liefert ein Array), mal als Whatsit\Field-Objekt (z. B. direkte
-	 * input()-Aufrufe mit $pod['fields'][...]). Whatsit-Objekte sind zwar
-	 * ArrayAccess, aber die interne Logik (get_sub_fields(), get_field_name())
-	 * arbeitet nur auf echten Arrays — Objekte daher via get_args() auflösen
-	 * (gleiches Muster wie PodsForm::options(), classes/PodsForm.php:706-712).
+	 * Pods übergibt Optionen in drei Formen: als Array (PodsForm::options()
+	 * merged Defaults und liefert ein Array), als Whatsit\Field-Objekt (z. B.
+	 * direkte input()-Aufrufe mit $pod['fields'][...]) und — auf dem
+	 * Validierungs-/Speicherpfad von PodsAPI::save_pod_item() — als
+	 * Pods\API\Whatsit\Value_Field, das Feld und Wert kapselt.
 	 *
-	 * @param array|object|null $options Feld-Optionen (Array, Whatsit\Field oder null).
+	 * Value_Field ist ArrayAccess, hat aber selbst kein get_args() und reicht
+	 * unbekannte Properties an das Feld durch. Ohne Sonderfall landet man im
+	 * (array)-Cast, und der liefert nur die protected Properties
+	 * ('' => null, 'Pods\API\Whatsit\Value_Field' => null): alle Feld-Optionen
+	 * sind dann unsichtbar. Folge (gemessen): repeater_limit, repeater_group
+	 * und repeater_sub_fields kamen über save_pod_item() nie an, validate()
+	 * und pre_save() arbeiteten mit leeren Optionen.
+	 *
+	 * @param array|object|null $options Feld-Optionen (Array, Whatsit\Field, Value_Field oder null).
 	 *
 	 * @return array
 	 */
 	protected function normalize_options( $options ) {
 		if ( is_object( $options ) ) {
-			if ( method_exists( $options, 'get_args' ) ) {
+			if ( method_exists( $options, 'get_field_object' ) ) {
+				// Pods\API\Whatsit\Value_Field: Feld kapselt die Optionen.
+				$field = $options->get_field_object();
+
+				if ( is_object( $field ) && method_exists( $field, 'get_args' ) ) {
+					$options = $field->get_args();
+				}
+			} elseif ( method_exists( $options, 'get_args' ) ) {
 				$options = $options->get_args();
+			} elseif ( $options instanceof ArrayAccess ) {
+				// ArrayAccess ohne get_args(): per Offset lesen, nicht casten.
+				$options = $this->read_options_via_offsets( $options );
 			} else {
 				$options = (array) $options;
 			}
 		}
 
 		return is_array( $options ) ? $options : array();
+	}
+
+	/**
+	 * Liest die von diesem Feld genutzten Optionen über ArrayAccess-Offsets.
+	 *
+	 * Fallback für Options-Objekte, die weder get_args() noch get_field_object()
+	 * anbieten. Bewusst auf die bekannten Keys beschränkt: ein vollständiges
+	 * Iterieren über ein fremdes Objekt ist nicht möglich (kein Iterator) und
+	 * ein (array)-Cast liefert nur die protected Properties.
+	 *
+	 * @param ArrayAccess $options Options-Objekt.
+	 *
+	 * @return array
+	 */
+	protected function read_options_via_offsets( $options ) {
+		$keys = array(
+			'repeater_limit',
+			'repeater_group',
+			'repeater_sub_fields',
+			'disable_dfv',
+			'required',
+			'label',
+			'name',
+			'type',
+		);
+
+		$result = array();
+
+		foreach ( $keys as $key ) {
+			try {
+				if ( $options->offsetExists( $key ) ) {
+					$result[ $key ] = $options->offsetGet( $key );
+				}
+			} catch ( Throwable $e ) {
+				// Defektes Options-Objekt: Key überspringen, nicht den Save abbrechen.
+				continue;
+			}
+		}
+
+		return $result;
 	}
 
 	/**

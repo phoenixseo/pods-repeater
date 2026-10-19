@@ -332,8 +332,8 @@ class FieldGroupResolutionTest extends WP_UnitTestCase {
 			$options
 		);
 
-		$this->assertInstanceOf( 'WP_Error', $result );
-		$this->assertSame( 'pods_repeater_required', $result->get_error_code() );
+		$this->assertIsArray( $result, 'Pflichtfeld-Verstoss muss als Meldungs-Array zurueckkommen (Pods-Vertrag).' );
+		$this->assertStringContainsString( 'is required in every row', $result[0] );
 	}
 
 	/**

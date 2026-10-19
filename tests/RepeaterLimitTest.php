@@ -110,15 +110,20 @@ class RepeaterLimitTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Ueber dem Limit liefert validate() einen WP_Error.
+	 * Ueber dem Limit liefert validate() ein Array mit der Limit-Meldung.
+	 *
+	 * Pods' Vertrag (PodsField_Text::validate(), PodsAPI::save_pod_item()):
+	 * true oder Liste von Fehlermeldungen — kein WP_Error, weil PodsAPI das
+	 * Ergebnis mit (array) castet und an wp_kses_post() weiterreicht.
 	 *
 	 * @return void
 	 */
 	public function test_validate_rejects_above_limit() {
 		$result = $this->field->validate( $this->rows, 'items', $this->options_with_limit( 2 ) );
 
-		$this->assertWPError( $result );
-		$this->assertSame( 'pods_repeater_limit_exceeded', $result->get_error_code() );
+		$this->assertIsArray( $result, 'validate() muss bei Limit-Ueberschreitung ein Meldungs-Array liefern.' );
+		$this->assertCount( 1, $result );
+		$this->assertStringContainsString( 'at most 2 rows', $result[0] );
 	}
 
 	/**
@@ -263,7 +268,7 @@ class RepeaterLimitTest extends WP_UnitTestCase {
 
 		$result = $this->field->validate( $rows, 'items', $this->options_with_limit( 5 ) );
 
-		$this->assertWPError( $result );
-		$this->assertSame( 'pods_repeater_required', $result->get_error_code() );
+		$this->assertIsArray( $result, 'required-Verstoss muss als Meldungs-Array zurueckkommen (Pods-Vertrag).' );
+		$this->assertStringContainsString( 'is required in every row', $result[0] );
 	}
 }
