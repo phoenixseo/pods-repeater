@@ -12,6 +12,10 @@
 /build/
 /dist/
 
+# Python-Bytecode der Porter-Skripte (scripts/*.py), generiert
+__pycache__/
+*.pyc
+
 # PHPUnit (WPUnit-Testbasis)
 /.phpunit.cache/
 .phpunit.result.cache
