@@ -107,7 +107,28 @@ class PodsField_Repeater extends PodsField {
 	 * @return array
 	 */
 	public function options() {
+		// Auswahl der registrierten Feldgruppen (Slug => Label). Der
+		// function_exists()-Guard hält options() auch dann benutzbar, wenn
+		// die Registry (includes/field-groups.php) nicht geladen ist —
+		// ohne Guard wäre das ein Fatal beim Rendern des Feld-Dialogs.
+		$group_choices = array();
+
+		if ( function_exists( 'pods_repeater_get_groups' ) ) {
+			foreach ( pods_repeater_get_groups() as $group_slug => $group ) {
+				$group_choices[ (string) $group_slug ] = isset( $group['label'] ) && is_scalar( $group['label'] )
+					? (string) $group['label']
+					: (string) $group_slug;
+			}
+		}
+
 		return array(
+			'repeater_group'                    => array(
+				'label'   => __( 'Field Group', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Textdomain bleibt bis S6 'pods'.
+				'help'    => __( 'Wenn gesetzt, kommen die Sub-Felder aus dieser Feldgruppe; das JSON darunter wird ignoriert.', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Siehe S6.
+				'type'    => 'pick',
+				'default' => '',
+				'data'    => $group_choices,
+			),
 			'repeater_sub_fields'               => array(
 				'label'   => __( 'Sub-Fields (JSON)', 'pods' ),
 				'help'    => __( 'JSON array of sub-field definitions.', 'pods' ),
@@ -427,6 +448,10 @@ class PodsField_Repeater extends PodsField {
 		$sub_fields = $this->get_sub_fields( $options );
 		$limit      = ! empty( $options['repeater_limit'] ) ? (int) $options['repeater_limit'] : 0;
 
+		// Gesetzter, aber unbekannter/leerer Gruppen-Slug: sichtbar machen,
+		// statt das Feld still leer zu rendern.
+		$group_notice = $this->get_group_notice( $options );
+
 		// Field name used by Pods for this field (array syntax for rows).
 		$field_name = $this->get_field_name( $name, $options );
 
@@ -438,6 +463,9 @@ class PodsField_Repeater extends PodsField {
 		ob_start();
 		?>
 		<div class="pods-form-ui-field pods-form-ui-field-type-repeater pods-form-ui-field-name-<?php echo esc_attr( PodsForm::clean( $name, true ) ); ?> pods-repeater" data-limit="<?php echo esc_attr( $limit ); ?>">
+			<?php if ( '' !== $group_notice ) : ?>
+				<p class="description pods-repeater-group-notice"><?php echo esc_html( $group_notice ); ?></p>
+			<?php endif; ?>
 			<div class="pods-repeater-rows" data-name="<?php echo esc_attr( $field_name ); ?>">
 				<?php foreach ( $rows as $index => $row ) : ?>
 					<div class="pods-repeater-row" data-index="<?php echo esc_attr( $index ); ?>">
@@ -814,17 +842,85 @@ class PodsField_Repeater extends PodsField {
 	}
 
 	/**
-	 * Parse the sub-field configuration from the field options (JSON string).
+	 * Parse the sub-field configuration from the field options.
+	 *
+	 * Zwei Quellen, eine Reihenfolge:
+	 *   1. Feldgruppe (`repeater_group`): eine registrierte, wiederverwendbare
+	 *      Definition aus der Registry (includes/field-groups.php). Ist der
+	 *      Slug gesetzt, gewinnt die Gruppe — auch dann, wenn zusätzlich
+	 *      Inline-JSON hinterlegt ist (so steht es im Help-Text der Option).
+	 *   2. Inline-JSON (`repeater_sub_fields`): der bisherige Weg, unverändert
+	 *      für alle Felder ohne Gruppen-Referenz (Abwärtskompatibilität).
+	 *
+	 * Ein gesetzter, aber unbekannter (oder leerer) Slug liefert bewusst ein
+	 * leeres Array statt eines Rückfalls aufs JSON: sonst würde eine
+	 * gelöschte Gruppe stillschweigend alte Inline-Definitionen reaktivieren.
+	 * input() macht den Fall als Hinweis sichtbar.
 	 *
 	 * @param array|object|null $options Field options (Array oder Whatsit\Field-Objekt).
 	 *
 	 * @return array List of sub-field definitions.
 	 */
 	protected function get_sub_fields( $options = null ) {
-		$options = $this->normalize_options( $options );
+		$options    = $this->normalize_options( $options );
+		$group_slug = $this->get_group_slug( $options );
+
+		if ( '' !== $group_slug && function_exists( 'pods_repeater_get_group_fields' ) ) {
+			$group_fields = pods_repeater_get_group_fields( $group_slug );
+
+			return is_array( $group_fields ) ? array_values( $group_fields ) : array();
+		}
+
 		$raw     = isset( $options['repeater_sub_fields'] ) ? $options['repeater_sub_fields'] : '';
 		$decoded = json_decode( (string) $raw, true );
 		return is_array( $decoded ) ? $decoded : array();
+	}
+
+	/**
+	 * Liest den normalisierten Gruppen-Slug aus den Feld-Optionen.
+	 *
+	 * @param array|object|null $options Field options.
+	 *
+	 * @return string Slug oder '' wenn keine Gruppe referenziert ist.
+	 */
+	protected function get_group_slug( $options = null ) {
+		$options = $this->normalize_options( $options );
+
+		if ( ! isset( $options['repeater_group'] ) || ! is_scalar( $options['repeater_group'] ) ) {
+			return '';
+		}
+
+		return trim( (string) $options['repeater_group'] );
+	}
+
+	/**
+	 * Hinweistext, wenn eine Gruppe referenziert ist, aber keine Sub-Felder
+	 * liefert (unbekannter Slug oder leere Gruppe). Leerer String = kein
+	 * Hinweis nötig.
+	 *
+	 * @param array|object|null $options Field options.
+	 *
+	 * @return string Hinweis (unübersetzt escaped der Aufrufer).
+	 */
+	protected function get_group_notice( $options = null ) {
+		$options    = $this->normalize_options( $options );
+		$group_slug = $this->get_group_slug( $options );
+
+		if ( '' === $group_slug || ! function_exists( 'pods_repeater_get_group_fields' ) ) {
+			return '';
+		}
+
+		$group_fields = pods_repeater_get_group_fields( $group_slug );
+
+		if ( is_array( $group_fields ) && ! empty( $group_fields ) ) {
+			return '';
+		}
+
+		return sprintf(
+			/* translators: %s: field group slug */
+			__( 'Die referenzierte Feldgruppe "%s" existiert nicht oder enthält keine Felder.', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Textdomain bleibt bis S6 'pods'.
+			$group_slug
+		);
 	}
 
 	/**
