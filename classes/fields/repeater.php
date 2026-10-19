@@ -256,6 +256,14 @@ class PodsField_Repeater extends PodsField {
 				)
 			);
 
+			// Max-Zeilen auch serverseitig durchsetzen: das JS verhindert nur
+			// das Hinzufügen im Browser, jeder andere Schreibweg (Import,
+			// Code, manipulierter POST) käme sonst ungeprüft durch.
+			$limit = $this->get_row_limit( $options );
+			if ( $limit > 0 && count( $value ) > $limit ) {
+				$value = array_slice( $value, 0, $limit );
+			}
+
 			return wp_json_encode( $value, JSON_UNESCAPED_UNICODE );
 		}
 
@@ -285,6 +293,29 @@ class PodsField_Repeater extends PodsField {
 			return true; // Nothing to validate.
 		}
 		$sub_fields = $this->get_sub_fields( $options );
+
+		// Max-Zeilen prüfen, bevor die Sub-Feld-Regeln greifen: zu viele
+		// Zeilen sind der grundlegendere Fehler und werden gemeldet statt
+		// still abgeschnitten (das Abschneiden in pre_save ist nur der
+		// Schutz für Schreibwege ohne Validierung).
+		$limit  = $this->get_row_limit( $options );
+		$filled = 0;
+		foreach ( $rows as $row ) {
+			if ( ! $this->is_row_empty( $row ) ) {
+				++$filled;
+			}
+		}
+		if ( $limit > 0 && $filled > $limit ) {
+			return new WP_Error(
+				'pods_repeater_limit_exceeded',
+				sprintf(
+					/* translators: %d: maximum number of rows */
+					__( 'This field allows at most %d rows.', 'pods-repeater' ),
+					$limit
+				)
+			);
+		}
+
 		foreach ( $rows as $row ) {
 			// Vollständig leere Zeilen überspringen: die von input() geseedete
 			// Leerzeile darf required-Sub-Felder nicht blockieren (sie wird in
@@ -895,6 +926,24 @@ class PodsField_Repeater extends PodsField {
 		}
 
 		return trim( (string) $options['repeater_group'] );
+	}
+
+	/**
+	 * Max-Zeilen aus den Feld-Optionen (0 = unbegrenzt).
+	 *
+	 * Das JS (ui/js/repeater.js) blockt nur das Hinzufügen im Browser; der
+	 * Wert muss auch serverseitig greifen, sonst umgehen Import, Code-Aufrufe
+	 * und manipulierte POSTs das Limit.
+	 *
+	 * @param array|object|null $options Field options.
+	 *
+	 * @return int Limit oder 0 für unbegrenzt.
+	 */
+	protected function get_row_limit( $options = null ) {
+		$options = $this->normalize_options( $options );
+		$limit   = isset( $options['repeater_limit'] ) ? (int) $options['repeater_limit'] : 0;
+
+		return $limit > 0 ? $limit : 0;
 	}
 
 	/**
