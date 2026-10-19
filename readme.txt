@@ -4,7 +4,7 @@ Tags: pods, repeater, repeatable, field, custom fields
 Requires at least: 6.4
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,21 +16,24 @@ Adds a **`repeater`** field type to [Pods](https://pods.io): a group of scalar s
 
 = Features =
 
-* **Repeatable field groups** — define a set of sub-fields (text, textarea, select, number, url) and repeat it any number of times.
+* **Repeatable field groups** — define a set of sub-fields (`text`, `paragraph`, `number`, `website`, `pick`, …) and repeat it any number of times.
 * **Server-rendered admin UI** — add / remove / move rows, no React/DFV build pipeline, no external assets.
 * **JSON storage** — clean LONGTEXT / meta value, lossless round-trip, works on meta- and table-based pods.
 * **`disable_dfv` aware** — uses the PHP `input()` renderer by default (required for custom field types without a DFV component).
+* **Field group registry** — reusable sub-field sets (`repeater_group`), plus a read API (`pods_repeater_get_groups()`, `pods_repeater_get_group_fields()`).
+* **Server-side row limit** — `repeater_limit` is enforced in `validate()` and `pre_save()`, not only in the browser.
+* **Pods display formats** — `repeater_display_format` (`default` / `br` / `ul` / `ol` / `custom`) plus separator, following the `pick` field convention.
 * **Built for the community** — generic field type; the SDC Page Builder is one consumer among many.
 * **i18n-ready** — all strings translatable, text domain `pods-repeater`.
 * **Required sub-field validation** — per-row, empty rows never block saving.
 
-This plugin is under active development (v0.1.0). See the [GitHub repository](https://github.com/phoenixseo/pods-repeater) for the roadmap and source.
+This plugin is under active development (v0.2.0). See the [GitHub repository](https://github.com/phoenixseo/pods-repeater) for the roadmap and source.
 
 = Requirements =
 
 * WordPress 6.4+
 * PHP 7.4+
-* Pods 3.x (tested with 3.3.9)
+* Pods 3.x (tested with 3.3.9.1)
 
 == Installation ==
 
@@ -47,12 +50,23 @@ Sub-fields are defined as a JSON array in the field's *Sub-Fields (JSON)* option
 ```
 [
   { "name": "subtitle", "label": "Subtitle", "type": "text", "required": true },
-  { "name": "link", "label": "Link", "type": "url" },
+  { "name": "link", "label": "Link", "type": "website" },
   { "name": "amount", "label": "Amount", "type": "number" }
 ]
 ```
 
-Supported types: `text`, `textarea`, `select`, `number`, `url`. Use the field *name* to read values: `pods_field( 'my_pod', item_id, 'repeater_field' )` returns an array of rows.
+Supported types are the Pods core field types, passed straight through to
+`PodsForm::field_method()`: `text`, `paragraph`, `number`, `website`, `phone`,
+`email`, `password`, `wysiwyg`, `code`, `date`, `time`, `datetime`, `currency`,
+`file`, `avatar`, `oembed`, `pick`, `boolean`, `color`, `slug`, plus the
+display-only types `heading` and `html`.
+
+Two names differ from what other page builders call them: Pods uses
+**`website`** where ACF uses `url`, and **`paragraph`** where ACF uses
+`textarea`. There is no `url` or `textarea` field type in Pods 3.x — use the
+core names above.
+
+Use the field *name* to read values: `pods_field( 'my_pod', item_id, 'repeater_field' )` returns an array of rows.
 
 == Frequently Asked Questions ==
 
@@ -74,6 +88,13 @@ As a JSON string (for example `[{"subtitle":"Erste Zeile","link":"https://exampl
 
 == Changelog ==
 
+= 0.2.0 =
+* Field group registry: reusable sub-field sets (`repeater_group`), plus the read API `pods_repeater_get_groups()` and `pods_repeater_get_group_fields()`.
+* Server-side row limit: `repeater_limit` is now enforced in `validate()` as well as `pre_save()`, so imports and direct API writes cannot exceed it.
+* `validate()` returns an array of messages (the Pods contract) instead of `WP_Error` — saves through `PodsAPI::save_pod_item()` no longer abort.
+* Corrected documentation: the supported sub-field types are the Pods core types (`website`, `paragraph`), not `url` / `textarea`, which do not exist in Pods 3.x.
+* Test suite expanded: field contract (validate / save / value / display / options), core integration (registry, convention path, save contract) and the limit invariant.
+
 = 0.1.0 =
 * Initial release (development milestone).
 * Repeater field type registration (Pods API, no core fork).
@@ -85,6 +106,9 @@ As a JSON string (for example `[{"subtitle":"Erste Zeile","link":"https://exampl
 * Text-domain loading, WP 6.7-compatible (init hook).
 
 == Upgrade Notice ==
+
+= 0.2.0 =
+Adds the field group registry and enforces the row limit server-side.
 
 = 0.1.0 =
 Initial release — development version.

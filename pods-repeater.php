@@ -3,7 +3,7 @@
  * Plugin Name: Pods Repeater Field
  * Plugin URI:  https://github.com/phoenixseo/pods-repeater
  * Description: Repeatable field groups (ACF-Repeater equivalent) for Pods. Generic, community-first: SDC Page Builder is one consumer among many.
- * Version:     0.1.0
+ * Version:     0.2.0
  * Author:      PHOENIXSEO
  * Author URI:  https://phoenixseo.de
  * License:     GPL-2.0-or-later
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'PODS_REPEATER_VERSION', '0.1.0' );
+define( 'PODS_REPEATER_VERSION', '0.2.0' );
 define( 'PODS_REPEATER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PODS_REPEATER_URL', plugin_dir_url( __FILE__ ) );
 

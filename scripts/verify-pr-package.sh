@@ -13,6 +13,11 @@
 #   2. gleiche Dateiliste (relativ, sortiert)
 #   3. gleiche Inhalte je Datei
 #   4. gleiche Dateirechte je Datei (Executable-Bit ist Teil der Ausgabe)
+#   5. Inhaltliche Mindestpruefung (seit S15):
+#      - alle erwarteten Artefakte vorhanden und nicht leer
+#      - Testmethoden portiert == Testmethoden in der Quelle (je Datei)
+#      - Felddatei ohne 'pods-repeater', JS-Skript ohne 'pods-repeater-'
+#      - PR-Beschreibung, Discussion-Kommentar und Checkliste nicht leer
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -62,6 +67,123 @@ done
 
 manifest "${RUN1}" >"${WORK}/manifest1"
 manifest "${RUN2}" >"${WORK}/manifest2"
+
+# ---------------------------------------------------------------------------
+# Inhaltliche Mindestpruefung — laeuft auf Lauf 1.
+#
+# Der Reproduzierbarkeitstest allein sagt nichts ueber den Inhalt: ein Build,
+# der zweimal dieselbe halbe Datei erzeugt, waere "reproduzierbar". Darum
+# hier die Zusagen, die der PR macht, hart nachpruefen.
+# ---------------------------------------------------------------------------
+CHECK_DIR="${RUN1}"
+
+check_artifacts() {
+  local missing=0
+  local expected=(
+    "classes/fields/repeater.php"
+    "ui/js/repeater.js"
+    "tests/wpunit/PodsRepeaterTest.php"
+    "tests/wpunit/PodsRepeaterContractTest.php"
+    "tests/wpunit/PodsRepeaterCoreIntegrationTest.php"
+    "readme-changelog.txt"
+    "PR-BESCHREIBUNG.md"
+    "DISCUSSION-KOMMENTAR.md"
+    "CHECKLISTE.md"
+  )
+  for rel in "${expected[@]}"; do
+    if [[ ! -s "${CHECK_DIR}/${rel}" ]]; then
+      printf '  fehlt oder leer: %s\n' "${rel}" >&2
+      missing=$((missing + 1))
+    fi
+  done
+  [[ "${missing}" -eq 0 ]] || DIE "${missing} Artefakt(e) fehlen oder sind leer in ${CHECK_DIR}"
+}
+
+check_test_counts() {
+  local pairs=(
+    "tests/RepeaterLimitTest.php:tests/wpunit/PodsRepeaterTest.php"
+    "tests/RepeaterContractTest.php:tests/wpunit/PodsRepeaterContractTest.php"
+    "tests/CoreIntegrationTest.php:tests/wpunit/PodsRepeaterCoreIntegrationTest.php"
+  )
+  local total=0
+  for pair in "${pairs[@]}"; do
+    local source="${REPO_ROOT}/${pair%%:*}"
+    local ported="${CHECK_DIR}/${pair##*:}"
+    local source_count ported_count
+
+    source_count="$(grep -c 'public function test_' "${source}" || true)"
+    ported_count="$(grep -c 'public function test_' "${ported}" || true)"
+
+    [[ "${source_count}" -eq "${ported_count}" ]] || \
+      DIE "${pair##*:}: ${ported_count} Tests portiert, Quelle ${pair%%:*} hat ${source_count}"
+    [[ "${ported_count}" -gt 0 ]] || DIE "${pair##*:}: keine Testmethoden portiert"
+
+    printf '  Tests %-42s %2s (Quelle: %s)\n' "${pair##*:}" "${ported_count}" "${source_count}"
+    total=$((total + ported_count))
+  done
+  printf '  Tests gesamt%-42s %2s\n' "" "${total}"
+  [[ "${total}" -ge 33 ]] || DIE "Nur ${total} Testmethoden im Paket (erwartet mindestens 33: 10+19+4)"
+}
+
+check_porting_residue() {
+  local field="${CHECK_DIR}/classes/fields/repeater.php"
+  local js="${CHECK_DIR}/ui/js/repeater.js"
+
+  local field_hits
+  field_hits="$(grep -c 'pods-repeater' "${field}" || true)"
+  [[ "${field_hits}" -eq 0 ]] || \
+    DIE "Felddatei enthaelt noch ${field_hits} Treffer 'pods-repeater' (Textdomain or Plugin-Prefix)"
+
+  # Im JS sind die Klassen pods-* erlaubt; 'pods-repeater-' waere ein
+  # Rest des Plugin-Namensraums.
+  local js_hits
+  js_hits="$(grep -c 'pods-repeater-' "${js}" || true)"
+  [[ "${js_hits}" -eq 0 ]] || \
+    DIE "Admin-Skript enthaelt noch ${js_hits} Treffer 'pods-repeater-'"
+
+  printf '  Portierungsreste Felddatei/JS%s %s/%s\n' "" "${field_hits}" "${js_hits}"
+}
+
+check_pr_text() {
+  local desc="${CHECK_DIR}/PR-BESCHREIBUNG.md"
+
+  # Die drei Pflichtabschnitte aus dem Sprint-Vertrag.
+  grep -q 'pods_repeatable_field_types' "${desc}" || \
+    DIE "PR-Beschreibung nennt pods_repeatable_field_types nicht"
+  grep -qi 'integrationsbeleg' "${desc}" || \
+    DIE "PR-Beschreibung hat keinen Integrationsbeleg aus S13"
+  grep -q 'Maintenance' "${desc}" || \
+    DIE "PR-Beschreibung enthaelt kein Maintenance-Angebot"
+  grep -qi 'Nicht enthalten' "${desc}" || \
+    DIE "PR-Beschreibung nennt nicht, was bewusst fehlt"
+
+  # Die Testzahl muss aus dem Build stammen, nicht aus dem Kopf: die
+  # Beschreibung muss die Gesamtzahl der portierten Tests enthalten.
+  local total
+  total="$(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterTest.php" || true)"
+  total=$((total \
+    + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterContractTest.php" || true) \
+    + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterCoreIntegrationTest.php" || true) ))
+  grep -q "${total} Testmethoden" "${desc}" || \
+    DIE "PR-Beschreibung nennt nicht '${total} Testmethoden' (Zahl aus dem Build)"
+
+  # Ein unquoted Heredoc haette die Backticks als Command-Substitution
+  # ausgefuehrt und die Inline-Code-Begriffe durch Leerstrings ersetzt.
+  # Indiz: eine Stelle wie "(, , ," oder "Typ  hinzu:" — zwei Leerzeichen
+  # in Folge mitten im Fliesstext, oder ein Komma direkt nach einer Klammer.
+  if grep -qE '\(, |, , |Typ {2,}[a-z]|alle {2,}\`' "${desc}"; then
+    DIE "PR-Beschreibung hat leere Stellen — Backticks wurden ausgewertet (unquoted Heredoc?)"
+  fi
+  grep -q '{{' "${desc}" && DIE "PR-Beschreibung enthaelt unersetzte Platzhalter"
+
+  printf '  PR-Beschreibung: Pflichtabschnitte vorhanden, Testzahl %s\n' "${total}"
+}
+
+printf 'Inhaltliche Pruefung (%s):\n' "${CHECK_DIR}"
+check_artifacts
+check_test_counts
+check_porting_residue
+check_pr_text
 
 if diff -u "${WORK}/manifest1" "${WORK}/manifest2" >"${WORK}/diff.txt"; then
   files="$(wc -l <"${WORK}/manifest1" | tr -d ' ')"

@@ -6,9 +6,14 @@
 #
 #   classes/fields/repeater.php       Feldtyp in der Pods-Konvention:
 #                                     Textdomain 'pods' statt 'pods-repeater'
-#   tests/wpunit/PodsRepeaterTest.php  Portierte Testfaelle
+#   ui/js/repeater.js                 Admin-Skript, CSS-Vertrag auf pods-*
+#   tests/wpunit/PodsRepeaterTest.php            Limit-Test
+#   tests/wpunit/PodsRepeaterContractTest.php    Vertragstest (S12)
+#   tests/wpunit/PodsRepeaterCoreIntegrationTest.php  Integrationsbeleg (S13)
 #   readme-changelog.txt              Changelog-Block fuer Pods' readme.txt
 #   PR-BESCHREIBUNG.md                Merge-Begruendung fuer den Kern
+#   DISCUSSION-KOMMENTAR.md           Entwurf fuer Discussion #7238
+#   CHECKLISTE.md                     Was vor dem Einreichen zu entscheiden ist
 #
 # Eigenschaften:
 #   - idempotent: dist/pods-pr wird vor dem Lauf geleert
@@ -36,12 +41,27 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUT_DIR="${PR_OUT_DIR:-${REPO_ROOT}/dist/pods-pr}"
 
 SOURCE_FIELD="${REPO_ROOT}/classes/fields/repeater.php"
-SOURCE_TEST="${REPO_ROOT}/tests/RepeaterLimitTest.php"
+
+# Alle drei Testdateien, die der PR mitbringt. Der Limit-Test ist die
+# aelteste Zusage (serverseitige Durchsetzung), der Vertragstest (S12) prueft
+# den Feldtyp als Ganzes, der Integrationsbeleg (S13) die Kern-Registrierung.
+SOURCE_TESTS=(
+  "${REPO_ROOT}/tests/RepeaterLimitTest.php"
+  "${REPO_ROOT}/tests/RepeaterContractTest.php"
+  "${REPO_ROOT}/tests/CoreIntegrationTest.php"
+)
+TARGET_TESTS=(
+  "PodsRepeaterTest.php"
+  "PodsRepeaterContractTest.php"
+  "PodsRepeaterCoreIntegrationTest.php"
+)
 
 DIE() { printf 'FEHLER: %s\n' "$*" >&2; exit 1; }
 
 [[ -f "${SOURCE_FIELD}" ]] || DIE "Quelldatei fehlt: ${SOURCE_FIELD}"
-[[ -f "${SOURCE_TEST}"  ]] || DIE "Quelldatei fehlt: ${SOURCE_TEST}"
+for source_test in "${SOURCE_TESTS[@]}"; do
+  [[ -f "${source_test}" ]] || DIE "Quelldatei fehlt: ${source_test}"
+done
 [[ -f "${SCRIPT_DIR}/port_field.py" ]] || DIE "scripts/port_field.py fehlt"
 [[ -f "${SCRIPT_DIR}/port_test.py"  ]] || DIE "scripts/port_test.py fehlt"
 
@@ -63,10 +83,32 @@ FIELD_OUT="${OUT_DIR}/classes/fields/repeater.php"
 
 # ---------------------------------------------------------------------------
 # 3. Tests portieren
+#
+# Die Zahl der Testmethoden wird gegen die Quelle geprueft. Eine stille
+# Verkleinerung des Pakets (z. B. weil ein Porter eine Datei halbiert) waere
+# hier der teuerste Fehler: der PR behauptet dann eine Abdeckung, die er
+# nicht hat.
 # ---------------------------------------------------------------------------
-TEST_OUT="${OUT_DIR}/tests/wpunit/PodsRepeaterTest.php"
-"${PYTHON}" "${SCRIPT_DIR}/port_test.py" "${SOURCE_TEST}" "${TEST_OUT}" || \
-  DIE "Portierung der Tests fehlgeschlagen"
+TEST_COUNTS=()
+for i in "${!SOURCE_TESTS[@]}"; do
+  source_test="${SOURCE_TESTS[$i]}"
+  target_name="${TARGET_TESTS[$i]}"
+  test_out="${OUT_DIR}/tests/wpunit/${target_name}"
+
+  "${PYTHON}" "${SCRIPT_DIR}/port_test.py" "${source_test}" "${test_out}" || \
+    DIE "Portierung von ${source_test} fehlgeschlagen"
+
+  source_count="$(grep -c 'public function test_' "${source_test}" || true)"
+  ported_count="$(grep -c 'public function test_' "${test_out}" || true)"
+
+  [[ "${source_count}" -gt 0 ]] || DIE "Quelle hat keine Testmethoden: ${source_test}"
+  [[ "${source_count}" -eq "${ported_count}" ]] || \
+    DIE "${target_name}: ${ported_count} Testmethoden portiert, Quelle hat ${source_count}"
+
+  TEST_COUNTS+=("${ported_count}")
+done
+
+TEST_TOTAL=$(( ${TEST_COUNTS[0]} + ${TEST_COUNTS[1]} + ${TEST_COUNTS[2]} ))
 
 # ---------------------------------------------------------------------------
 # 3b. Admin-Skript portieren
@@ -97,6 +139,10 @@ CHANGELOG
 
 # ---------------------------------------------------------------------------
 # 5. PR-Beschreibung
+#
+# Die Testzahlen kommen aus dem Lauf oben, nicht aus dem Kopf: TEST_TOTAL und
+# die Einzelzahlen werden eingesetzt. Aendert sich ein Test, aendert sich der
+# Text mit.
 # ---------------------------------------------------------------------------
 cat > "${OUT_DIR}/PR-BESCHREIBUNG.md" <<'PRDESC'
 # Feldtyp: Repeater (wiederholbare Feldgruppe)
@@ -104,66 +150,110 @@ cat > "${OUT_DIR}/PR-BESCHREIBUNG.md" <<'PRDESC'
 ## Was dieser PR macht
 
 Fuegt Pods einen Feldtyp `repeater` hinzu: eine konfigurierbare Gruppe von
-Sub-Feldern (text, textarea, number, pick, …), die beliebig oft wiederholt
-werden kann. Das ist funktional das Aequivalent zum ACF-Repeater.
-
-- `classes/fields/repeater.php` — Feldklasse `PodsField_Repeater`. Eine
-  Datei, keine Aenderung an bestehenden Feldtypen.
-- Sub-Felder kommen aus Inline-JSON oder aus einer wiederverwendbaren
-  Feldgruppe.
-- Speicherung als JSON; `value()` liefert beim Lesen ein PHP-Array.
-- Frontend-Ausgabe folgt der Pods-Konvention: `repeater_display_format`
-  (`default` / `br` / `ul` / `ol` / `custom`) plus Separator-Option, Muster
-  wie `PodsField_Pick::_display_format_multi()`.
-- Sub-Felder rendern durch die bestehende Pods-Pipeline
-  (`PodsForm::field()`), inklusive der typspezifischen Optionen.
+Sub-Feldern (`text`, `paragraph`, `number`, `website`, `pick`, …), die beliebig
+oft wiederholt werden kann. Werte werden als JSON gespeichert und beim Lesen
+als PHP-Array zurueckgegeben. Funktional entspricht das dem ACF-Repeater, ohne
+Abhaengigkeit von ACF.
 
 ## Warum
 
 Discussion #7238 und Issue #109 fragen seit Jahren nach wiederholbaren
 Feldgruppen im Kern. Bisher gibt es dafuer nur Zusatz-Plugins und
 ACF-Interoperabilitaet. Der Bedarf ist belegt, die Bauform ist klein und
-isoliert: ein neuer Feldtyp, den niemand einschalten muss, der aber jedem
-offensteht, der ihn konfiguriert.
+isoliert: ein neuer Feldtyp, den niemand einschalten muss.
+
+## Was der PR am Kern anfasst — Integrationsbeleg
+
+Der PR ist **additiv**. Er aendert keine bestehende Kern-Datei:
+
+| Datei | Status |
+| --- | --- |
+| `classes/fields/repeater.php` | neu (Feldklasse `PodsField_Repeater`) |
+| `ui/js/repeater.js` | neu (Admin-Interaktion) |
+| `tests/wpunit/PodsRepeaterTest.php` | neu |
+| `tests/wpunit/PodsRepeaterContractTest.php` | neu |
+| `tests/wpunit/PodsRepeaterCoreIntegrationTest.php` | neu |
+| `readme.txt` / `changelog.txt` | ein Eintrag |
+
+Er nutzt vier bestehende Kern-Schnittstellen, alle unveraendert:
+
+1. **Registrierung.** Der Typ wird ueber `PodsForm::register_field_type()`
+   angemeldet (Konvention `PODS_DIR . 'classes/fields/{type}.php'`, Klasse
+   `PodsField_{Type}`). Der Autoloader des Kerns
+   (`PodsInit.php:193-204`) findet nur klassen im Kern-Verzeichnis; fuer
+   einen externen Pfad greift der beim Registrieren uebergebene Dateipfad
+   (`PodsForm.php:1569-1571`). Im Kern liegt die Datei am Konventionsort,
+   beide Wege zeigen also auf dieselbe Datei.
+2. **Formular-Rendering.** Sub-Felder werden durch `PodsForm::field()`
+   gerendert — die typspezifischen Optionen und Sanitizer des Kerns gelten
+   damit unveraendert auch fuer Sub-Felder.
+3. **Speichern.** `validate()` gibt ein **Array von Meldungen** zurueck, kein
+   `WP_Error`. Das ist der Pods-Vertrag: `PodsAPI::save_pod_item()` castet
+   das Ergebnis mit `(array)` und reicht die Elemente an `wp_kses_post()`
+   weiter. Ein `WP_Error` an dieser Stelle bricht den Save mit einem
+   PHP-Fehler ab. Der `PodsRepeaterCoreIntegrationTest` haelt genau das fest.
+4. **Anzeige.** Frontend-Ausgabe folgt der Pods-Konvention
+   `repeater_display_format` (`default` / `br` / `ul` / `ol` / `custom`) plus
+   Separator-Option, Muster wie `PodsField_Pick::_display_format_multi()`.
+
+Der Integrationsbeleg laeuft gegen Pods 3.3.9.1 und prueft alle vier Zusagen
+mit harten Assertions (kein Skip): Registrierung landet in
+`PodsForm::\$field_types['repeater']`, die Felddatei liegt am
+Konventionspfad, die Klasse laedt aus dem Kern-Verzeichnis, und `validate()`
+liefert ein Array, das `save_pod_item()` ohne Fehler verarbeitet.
 
 ## Wichtig: NICHT in `pods_repeatable_field_types` eintragen
 
 Der Typ gehoert ausdruecklich **nicht** in den Filter
 `pods_repeatable_field_types`. Steht er dort, behandelt Pods ihn als
 wiederholbaren Standard-Typ und rendert ihn durch den generischen
-`PodsForm`-Renderer statt durch die eigene `input()`-Methode. Folge: das
-Zeilengeruest, die Add/Remove/Move-JS-Vertraege und die JSON-Speicherlogik
-greifen nicht mehr, das Feld erscheint als einzelnes Eingabefeld.
+`PodsForm`-Renderer statt durch die eigene `input()`-Methode.
 
-Der Repeater bringt seine eigene Wiederholung mit — in `input()` sowie in
-`pre_save()`/`value()`. Er braucht den Filter nicht, und der
-`form_field_type` bleibt `repeater` (kein `repeatable=1`).
-
-Verwandt: Pods erzwingt `repeatable=0` fuer Feldtypen ausserhalb der
-Whitelist. Der Repeater ist von dieser Whitelist unabhaengig, weil seine
-Wiederholung in der Feldklasse liegt und nicht im Formular-Renderer.
+**Folge, konkret:** das Zeilengeruest, die Add/Remove/Move-JS-Vertraege und
+die JSON-Speicherlogik greifen nicht mehr — das Feld erscheint als einzelnes
+Eingabefeld, und `pre_save()` bekommt eine Zeichenkette statt eines Arrays.
+Der Repeater bringt seine eigene Wiederholung mit (in `input()`, `pre_save()`
+und `value()`); er braucht den Filter nicht, und `form_field_type` bleibt
+`repeater` (kein `repeatable=1`).
 
 ## Admin-UI: Skript liegt bei
 
-Die Feldklasse rendert die Zeilen; `ui/js/repeater.js` haengt die
-Interaktion daran (Zeile hinzufuegen, entfernen, verschieben, Sub-Feld
-konfigurieren). Beides kommt in diesem PR mit, und beide sprechen
-denselben CSS-Vertrag: `pods-rows`, `pods-row`, `pods-subfield`,
-`pods-add`, `pods-remove`, `pods-move-up`, `pods-move-down`.
+Die Feldklasse rendert die Zeilen; `ui/js/repeater.js` haengt die Interaktion
+daran (Zeile hinzufuegen, entfernen, verschieben). Beide sprechen denselben
+CSS-Vertrag: `pods-rows`, `pods-row`, `pods-subfield`, `pods-add`,
+`pods-remove`, `pods-move-up`, `pods-move-down`.
 
 Die Klassen heissen `pods-*` und nicht `pods-repeater-*`, weil sie im Kern
-im Pods-Namensraum liegen. Der Kern kennt keine dieser Namen (geprueft
-gegen 3.3.9.1: kein `pods-row`, `pods-add`, `pods-subfield`), also
-kollidiert das nicht mit Bestandsklassen. Der Vertrag wird von einem Test
-festgehalten (`test_css_klassen_vertrag_zwischen_php_und_js`), damit PHP
-und JS nicht auseinanderlaufen.
+im Pods-Namensraum liegen. Der Kern kennt keine dieser Namen (geprueft gegen
+3.3.9.1), also kollidiert das nicht mit Bestandsklassen. Ein Test haelt den
+Vertrag zwischen PHP und JS fest.
 
 ## Tests
 
-`tests/wpunit/PodsRepeaterTest.php` (WP_UnitTestCase) deckt die
-Limit-Invariante auf beiden Ebenen ab: `validate()` meldet zu viele Zeilen,
-`pre_save()` schneidet zurueck, leere Template-Zeilen zaehlen nicht mit.
-Die Tests brauchen keine Fixtures und laufen in der Standard-Testsuite mit.
+{{TOTAL}} Testmethoden in drei Dateien, alle {{BT}}WP_UnitTestCase{{BT}}, keine
+Fixtures, keine Netzwerkzugriffe:
+
+| Datei | Testmethoden | deckt ab |
+| --- | --- | --- |
+| {{BT}}PodsRepeaterTest.php{{BT}} | {{C0}} | serverseitiges Limit: {{BT}}validate(){{BT}} meldet, {{BT}}pre_save(){{BT}} schneidet zurueck, leere Template-Zeilen zaehlen nicht |
+| {{BT}}PodsRepeaterContractTest.php{{BT}} | {{C1}} | Feldtyp als Ganzes: {{BT}}validate(){{BT}}-Rueckgabevertrag, echter Save ueber die Pods-API, {{BT}}value(){{BT}}, {{BT}}display(){{BT}}, Options- und CSS-Vertrag |
+| {{BT}}PodsRepeaterCoreIntegrationTest.php{{BT}} | {{C2}} | Kern-Integration: Registrierung, Konventionspfad, Laden aus dem Kern-Verzeichnis, Save-Vertrag |
+
+Im Plugin-Repo laufen alle drei Dateien in der Standard-Suite mit. Die
+portierten Fassungen von Vertrag und Kern-Integration tragen zusaetzlich die
+Gruppenmarke {{BT}}@group podscore{{BT}}: im Pods-Repo wuerden sie sonst
+gegen eine Feldklasse laufen, die es dort erst mit diesem PR gibt.
+
+## Feldgruppen-Registry: im Kern nicht enthalten
+
+Die Option `repeater_group` verweist auf eine wiederverwendbare Feldgruppe.
+Diese Registry ist ein Plugin-Konzept; im Kern gibt es sie nicht. Die
+Feldklasse prueft mit `function_exists()` und faellt sauber auf Inline-JSON
+zurueck: `options()` liefert `repeater_group` mit leerer Auswahl, wenn
+`pods_repeater_get_groups()` fehlt; `get_sub_fields()` liest
+`repeater_sub_fields` (JSON), wenn `pods_repeater_get_group_fields()` fehlt.
+Kein Fatal, keine Warnung — der Typ ist im Kern voll benutzbar, nur ohne den
+Komfort geteilter Gruppen.
 
 ## Maintenance
 
@@ -171,23 +261,6 @@ Ich uebernehme die Pflege des Feldtyps: Bugfixes, Kompatibilitaet mit neuen
 Pods-Versionen und Anpassungen am Datenformat. Der Typ stammt aus einem
 produktiven Einsatz und laeuft dort mit echtem Redaktionsbetrieb — die
 Portierung ist keine Skizze, sondern der Code, der dort schreibt und liest.
-
-## Feldgruppen-Registry: im Kern nicht enthalten
-
-Die Option `repeater_group` verweist auf eine wiederverwendbare Feldgruppe.
-Diese Registry ist ein Plugin-Konzept; im Kern gibt es sie nicht. Die
-Feldklasse prueft deshalb mit `function_exists()` und faellt sauber auf
-Inline-JSON zurueck. Konkret:
-
-- `options()` liefert `repeater_group` mit leerer Auswahl, wenn
-  `pods_repeater_get_groups()` fehlt.
-- `get_sub_fields()` liest die Sub-Felder aus `repeater_sub_fields`
-  (JSON), wenn `pods_repeater_get_group_fields()` fehlt.
-
-Kein Fatal, keine Warnung — der Typ ist im Kern voll benutzbar, nur ohne
-den Komfort der geteilten Gruppen. Wer die Registry will, kann sie als
-eigenes Plugin nachruesten; die beiden Funktionsnamen sind der
-Anschlusspunkt.
 
 ## Nicht enthalten (bewusst)
 
@@ -197,11 +270,155 @@ Anschlusspunkt.
   ist zunaechst JSON bzw. eine Feldgruppe (siehe oben).
 PRDESC
 
+# Platzhalter einsetzen. Das Heredoc ist bewusst quoted ('PRDESC'), damit
+# Backticks und ${...} im Text stehen bleiben — ein unquoted Heredoc haette
+# die Inline-Code-Markierungen als Command-Substitution ausgefuehrt und
+# jeden Backtick-Ausdruck durch eine leere Zeichenkette ersetzt.
+PR_DESC="${OUT_DIR}/PR-BESCHREIBUNG.md"
+sed -i \
+  -e "s/{{TOTAL}}/${TEST_TOTAL}/g" \
+  -e "s/{{C0}}/${TEST_COUNTS[0]}/g" \
+  -e "s/{{C1}}/${TEST_COUNTS[1]}/g" \
+  -e "s/{{C2}}/${TEST_COUNTS[2]}/g" \
+  -e "s/{{BT}}/\`/g" \
+  "${PR_DESC}"
+
+# Kein Platzhalter darf stehenbleiben, und die Testzahl muss drin sein.
+grep -q '{{' "${PR_DESC}" && DIE "PR-Beschreibung enthaelt unersetzte Platzhalter"
+grep -q "${TEST_TOTAL} Testmethoden" "${PR_DESC}" || \
+  DIE "PR-Beschreibung nennt die Testzahl ${TEST_TOTAL} nicht"
+
 # ---------------------------------------------------------------------------
-# 6. Selbstpruefung: alle vier Artefakte vorhanden und nicht leer
+# 6. Discussion-Kommentar (#7238)
+#
+# Kurz, konkret, ohne Marktschreier-Ton. Zwei Zusagen: ein Feldtyp als
+# Bauform-Vorschlag und die Bereitschaft, ihn umzubauen, wenn die
+# Maintainer die Erweiterung des bestehenden `repeatable`-Mechanismus
+# bevorzugen. Die Bauform-Frage ist die eigentliche Entscheidung, die der
+# PR nicht selbst treffen kann.
 # ---------------------------------------------------------------------------
-for artifact in "${FIELD_OUT}" "${TEST_OUT}" "${JS_OUT}" \
-                "${OUT_DIR}/readme-changelog.txt" "${OUT_DIR}/PR-BESCHREIBUNG.md"; do
+cat > "${OUT_DIR}/DISCUSSION-KOMMENTAR.md" <<'DISCUSSION'
+# Kommentar-Entwurf fuer Discussion #7238
+
+> Vor dem Posten pruefen: `<REPO-URL>` am Ende durch den Repo-Link ersetzen.
+
+---
+
+Ich habe die Anfrage aus diesem Thread und aus Issue #109 zum Anlass
+genommen, einen Repeater-Feldtyp zu bauen und als PR vorzubereiten:
+wiederholbare Feldgruppen, Sub-Felder konfigurierbar, Werte als JSON.
+
+Zur Bauform habe ich eine Frage, die ich nicht selbst entscheiden will:
+
+**Ein eigener Feldtyp** (was ich gebaut habe) oder **eine Erweiterung des
+bestehenden `repeatable`-Mechanismus**? Mein Feldtyp bringt die Wiederholung
+komplett selbst mit — `input()`, `pre_save()`, `value()`, dazu ein eigenes
+Admin-Skript. Das laesst den Kern unangetastet, kostet aber eine zweite
+Stelle, an der Zeilenverwaltung implementiert ist. Wenn ihr den bestehenden
+Mechanismus erweitern wollt, ist mein Code die halbe Arbeit dafuer: die
+Feldklasse, die Speicherlogik und die Tests bleiben brauchbar, das
+Admin-Skript geht in die vorhandene Loesung auf.
+
+Was der PR mitbringt:
+
+- Additiv, keine Aenderung an bestehenden Kern-Dateien. Der Typ wird ueber
+  `PodsForm::register_field_type()` registriert wie jeder andere Feldtyp.
+- Sub-Felder rendern durch `PodsForm::field()`, also mit den Sanitizern und
+  Optionen des Kerns.
+- 33 Testmethoden in drei Dateien gegen Pods 3.3.9.1: Limit-Invariante,
+  Feldvertrag, Kern-Integration (Registrierung, Konventionspfad,
+  Save-Vertrag). Keine Fixtures, kein Netzwerk.
+- Admin-UI im echten Browser geprueft: Zeile anlegen, Limit greift,
+  verschieben, loeschen, speichern, Werte nach dem Neuladen korrekt.
+
+Wichtig fuer die Einordnung: der Typ gehoert **nicht** in
+`pods_repeatable_field_types`. Steht er dort, rendert der generische
+Renderer statt meiner `input()`, und das Feld zerfaellt zu einem einzelnen
+Eingabefeld. Die eigene Wiederholung ist gerade der Punkt.
+
+Repo: <REPO-URL>
+
+Ich passe den PR gern an die Bauform an, die ihr fuer richtig haltet — auch
+wenn das heisst, ihn auf den bestehenden Mechanismus umzuschreiben. Ein
+kurzes „so" oder „anders" reicht mir als Richtung.
+DISCUSSION
+
+# ---------------------------------------------------------------------------
+# 7. Abnahme-Checkliste fuer den Auftraggeber
+#
+# Der Sprint reicht nicht ein. Diese Liste ist die Entscheidungsvorlage:
+# jeder Punkt ist eine Entscheidung, nicht eine Aufgabe.
+# ---------------------------------------------------------------------------
+cat > "${OUT_DIR}/CHECKLISTE.md" <<'CHECKLISTE'
+# Checkliste vor dem Einreichen
+
+Der Sprint stoppt hier bewusst: kein `git push`, kein `gh pr create`, keine
+Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
+
+## 1. Muss entschieden werden
+
+- [ ] **Repo-Name und Link.** Der Platzhalter `<REPO-URL>` im
+      Discussion-Kommentar muss durch das oeffentliche Repo ersetzt werden.
+      Gibt es keins, faellt der Verweis weg — dann traegt der Kommentar nur
+      die Beschreibung, und der PR braucht einen Fork.
+- [ ] **Fork oder Branch.** Ziel ist `pods-framework/pods`. Der PR kommt aus
+      einem Fork, weil das Arbeitsrepo kein Remote hat.
+- [ ] **Reihenfolge: erst Kommentar, dann PR?** Empfehlung: erst der
+      Kommentar in #7238, zwei bis drei Tage warten, dann der PR mit dem
+      Verweis auf die Antwort. Ein PR ohne Vorlauf in einem alten Thread
+      wird eher geschlossen als gelesen.
+- [ ] **Screenshots beilegen?** Die Admin-UI ist visuell; ein Bild des
+      Repeaters mit zwei Zeilen im Editor hilft mehr als drei Absaetze. Die
+      Datei liegt nicht im Paket (`dist/e2e/nach-neuladen.png` entsteht bei
+      jedem E2E-Lauf neu, `dist/` ist gitignored). Bei Bedarf vor dem PR
+      erzeugen: `node scripts/e2e-admin-ui.mjs`.
+- [ ] **Lizenzheader.** Feldklasse und Skript tragen den GPL-2.0-or-later-
+      Header des Plugins. Vor dem PR gegen die Kopfzeilen bestehender
+      Kern-Felddateien abgleichen (Jahr, Copyright-Inhaber).
+
+## 2. Vor dem Absenden technisch pruefen
+
+- [ ] `bash scripts/build-pr-package.sh && bash scripts/verify-pr-package.sh`
+      — muss durchlaufen, Ausgabe ohne `FEHLER`.
+- [ ] `php -l` auf den drei portierten Testdateien und der Feldklasse
+      (im Container, nicht auf dem Host).
+- [ ] Testzahlen in `PR-BESCHREIBUNG.md` gegen den eigenen Suite-Lauf
+      abgleichen (der Generator setzt sie beim Bauen ein).
+- [ ] `grep -c 'pods-repeater' dist/pods-pr/classes/fields/repeater.php` —
+      muss 0 sein (nur `pods-*`-CSS-Klassen duerfen bleiben, sie tragen
+      keinen Domain-Suffix).
+- [ ] Gruppenmarke pruefen: die portierten Fassungen von Vertrag und
+      Kern-Integration tragen `@group podscore`. Im Plugin-Repo laufen sie in
+      der Standard-Suite mit; im Pods-Repo wuerde die Suite ohne die Marke rot,
+      weil die Feldklasse dort erst mit dem PR existiert.
+
+## 3. Was im Paket bewusst fehlt
+
+- Verschachtelte Repeater — gesperrt, mit Hinweis im Editor.
+- React-DFV-Editor fuer die Sub-Feld-Konfiguration — Konfiguration ist
+  zunaechst JSON bzw. eine Feldgruppe.
+- Die Feldgruppen-Registry — Plugin-Konzept, im Kern nicht enthalten. Der
+  Typ faellt per `function_exists()` sauber auf Inline-JSON zurueck.
+
+## 4. Nach dem Einreichen
+
+- [ ] Antworten im Thread beobachten; die Bauform-Frage ist gestellt und
+      braucht eine Antwort, bevor Review-Arbeit sinnvoll ist.
+- [ ] Bei Aenderungswunschen: Testsuite bleibt der Massstab, keine
+      Assertion abschwaechen, um Review-Kommentare zu erfuellen.
+CHECKLISTE
+
+# ---------------------------------------------------------------------------
+# 8. Selbstpruefung: alle Artefakte vorhanden und nicht leer
+# ---------------------------------------------------------------------------
+for artifact in "${FIELD_OUT}" "${JS_OUT}" \
+                "${OUT_DIR}/tests/wpunit/PodsRepeaterTest.php" \
+                "${OUT_DIR}/tests/wpunit/PodsRepeaterContractTest.php" \
+                "${OUT_DIR}/tests/wpunit/PodsRepeaterCoreIntegrationTest.php" \
+                "${OUT_DIR}/readme-changelog.txt" \
+                "${OUT_DIR}/PR-BESCHREIBUNG.md" \
+                "${OUT_DIR}/DISCUSSION-KOMMENTAR.md" \
+                "${OUT_DIR}/CHECKLISTE.md"; do
   [[ -s "${artifact}" ]] || DIE "Artefakt fehlt oder ist leer: ${artifact}"
 done
 
@@ -215,6 +432,19 @@ PLUGIN_HITS="$(grep -c 'pods-repeater' "${FIELD_OUT}" || true)"
 printf 'OK: %s\n' "${OUT_DIR}"
 printf '  classes/fields/repeater.php       %5s Zeilen (Quelle: %s)\n' \
   "$(wc -l < "${FIELD_OUT}" | tr -d ' ')" "$(wc -l < "${SOURCE_FIELD}" | tr -d ' ')"
-printf '  tests/wpunit/PodsRepeaterTest.php %5s Zeilen (Quelle: %s)\n' \
-  "$(wc -l < "${TEST_OUT}" | tr -d ' ')" "$(wc -l < "${SOURCE_TEST}" | tr -d ' ')"
-printf "  Textdomain-Fundstellen            %5s\n" "${DOMAIN_HITS}"
+printf '  ui/js/repeater.js                 %5s Zeilen\n' \
+  "$(wc -l < "${JS_OUT}" | tr -d ' ')"
+for i in "${!SOURCE_TESTS[@]}"; do
+  source_test="${SOURCE_TESTS[$i]}"
+  target_name="${TARGET_TESTS[$i]}"
+  test_out="${OUT_DIR}/tests/wpunit/${target_name}"
+  printf '  tests/wpunit/%-38s %5s Zeilen (Quelle: %s), %2s Tests\n' \
+    "${target_name}" \
+    "$(wc -l < "${test_out}" | tr -d ' ')" \
+    "$(wc -l < "${source_test}" | tr -d ' ')" \
+    "${TEST_COUNTS[$i]}"
+done
+printf '  Testmethoden gesamt               %5s\n' "${TEST_TOTAL}"
+printf '  Textdomain-Fundstellen            %5s\n' "${DOMAIN_HITS}"
+printf '  Artefakte                         %5s\n' \
+  "$(find "${OUT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
