@@ -3,9 +3,14 @@
  * RepeaterRoundtripTest — JSON-Roundtrip des Pods-Repeater-Felds.
  *
  * Erste echte Testklasse auf der eigenständigen WP-Testbasis
- * (wp-phpunit 6.8.2 + PHPUnit 10, siehe tests/bootstrap.php). Inhaltliche
+ * (wp-phpunit 6.8.2 + PHPUnit 9.6, siehe tests/bootstrap.php). Inhaltliche
  * Vorlage: tests/spike-t5.php + tests/spike-t6b-roundtrip.php (dort
  * verifizierte Save-Signatur: save_pod_item mit 'data' + 'from' => 'save').
+ *
+ * Klassenname: seit dem Core-Port (9fce5a3) heißt der Feldtyp
+ * PodsField_Repeater (classes/fields/repeater.php), nicht mehr
+ * Pods_Repeater_Field. Die Existenzprüfung ist eine harte Assertion —
+ * eine künftige Umbenennung soll den Lauf rot machen, nicht still skippen.
  *
  * Getestet wird der Speicherpfad des Felds, wie ihn Pods in wp_postmeta
  * nutzt (JSON-String):
@@ -30,7 +35,7 @@ class RepeaterRoundtripTest extends WP_UnitTestCase {
 	/**
 	 * Feldklasse unter Test (echte Plugin-Klasse, nicht die Pods-Bridge).
 	 *
-	 * @var Pods_Repeater_Field
+	 * @var PodsField_Repeater
 	 */
 	protected $field;
 
@@ -40,13 +45,21 @@ class RepeaterRoundtripTest extends WP_UnitTestCase {
 	public function set_up() {
 		parent::set_up();
 
-		if ( ! class_exists( 'Pods_Repeater_Field' ) ) {
-			$this->markTestSkipped(
-				'Pods_Repeater_Field nicht geladen — Pods/pods-repeater wurden im muplugins_loaded-Bootstrap nicht aktiv (siehe tests/bootstrap.php).'
-			);
-		}
+		// Harte Assertion statt markTestSkipped(): Lädt der Bootstrap den
+		// Feldtyp nicht (oder wird die Klasse umbenannt), muss der Lauf rot
+		// werden. Ein Skip würde die drei inhaltlichen Tests still entwerten.
+		$this->assertTrue(
+			class_exists( 'PodsField_Repeater' ),
+			'PodsField_Repeater nicht geladen — Pods/pods-repeater wurden im muplugins_loaded-Bootstrap nicht aktiv (siehe tests/bootstrap.php) oder die Feldklasse wurde umbenannt.'
+		);
 
-		$this->field = new Pods_Repeater_Field();
+		$this->field = new PodsField_Repeater();
+
+		$this->assertInstanceOf(
+			'PodsField',
+			$this->field,
+			'PodsField_Repeater muss von der Pods-Basisklasse PodsField erben.'
+		);
 	}
 
 	/**
@@ -148,7 +161,7 @@ class RepeaterRoundtripTest extends WP_UnitTestCase {
 	/**
 	 * (c) Feld-Option disable_dfv: Default muss true sein (PHP-Renderer via
 	 * input(), kein DFV-React — Pflicht für Custom-Feldtypen ohne DFV-
-	 * Komponente; siehe options() in classes/field-repeater.php).
+	 * Komponente; siehe options() in classes/fields/repeater.php).
 	 *
 	 * @return void
 	 */
