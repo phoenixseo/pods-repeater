@@ -570,6 +570,42 @@ class PodsField_Repeater extends PodsField {
 			$html = '';
 		}
 
+		// disable_dfv wird nur von Feldklassen respektiert, die input()
+		// selbst überschreiben. Typen ohne eigene Klasse — textarea ist der
+		// wichtigste, Pods hat kein classes/fields/textarea.php — fallen auf
+		// PodsField::input() zurück und liefern einen DFV-React-Mount. Dessen
+		// Feldname steht nur im JSON-Blob (pods-dfv-field-data), es gibt kein
+		// name="..." im HTML: ein Formular-POST bekäme für solche Spalten nie
+		// einen Wert. Deshalb hier generisch nachziehen und auf Pods' eigenes
+		// Template (ui/fields/<type>.php) nativ rendern. Fehlt das Template,
+		// bleibt das bisherige HTML stehen — kein harter Fehler.
+		if ( '' !== $html && false !== strpos( $html, 'pods-dfv-field-data' ) ) {
+			$native_type     = PodsForm::clean( $sub_type, true, true );
+			$native_template = PODS_DIR . 'ui/fields/' . $native_type . '.php';
+
+			if ( '' !== $native_type && file_exists( $native_template ) ) {
+				// Variablen exakt wie in Pods' Feldklassen (Muster
+				// PodsField_Paragraph::input(), das für disable_dfv auf
+				// ui/fields/textarea.php zeigt): $name ist der volle
+				// HTML-Name, damit merge_attributes() name/id baut,
+				// $options trägt name_prefix/attributes (id, data-sub).
+				// $form_field_type ist die Typ-Kennung, auf die Templates
+				// verzweigen (datetime.php: date/time/datetime) — nicht
+				// PodsForm::$field_type, das außerhalb des Datei-Renderings
+				// null ist.
+				$name            = $input_name;
+				$form_field_type = $native_type;
+				$pod             = null;
+				$id              = null;
+
+				$native_html = (string) pods_view( $native_template, compact( array_keys( get_defined_vars() ) ), false, 'cache', true );
+
+				if ( '' !== $native_html ) {
+					$html = $native_html;
+				}
+			}
+		}
+
 		// wysiwyg (TinyMCE/Quicktags) verschluckt data-sub in seinem eigenen
 		// Options-Handling; der JS-Kontrakt braucht data-sub aber auf einem
 		// Element in der Zeile. Fallback: data-sub am Wrapper statt am Input.
