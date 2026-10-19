@@ -487,6 +487,20 @@ class PodsField_Repeater extends PodsField {
 		// statt das Feld still leer zu rendern.
 		$group_notice = $this->get_group_notice( $options );
 
+		// Gespeicherte Zeilen über dem Limit: nicht verstecken (sonst
+		// verschwänden Daten aus der Ansicht), aber sagen, dass gespeichert
+		// erst nach dem Entfernen wird. Passiert, wenn das Limit gesenkt
+		// wurde, nachdem Zeilen existierten.
+		$limit_notice = '';
+		if ( $limit > 0 && count( $rows ) > $limit ) {
+			$limit_notice = sprintf(
+				/* translators: 1: number of stored rows, 2: maximum number of rows */
+				__( 'This field holds %1$d rows but allows %2$d. Remove the extra rows before saving; the field will not save while it exceeds the limit.', 'pods-repeater' ),
+				count( $rows ),
+				$limit
+			);
+		}
+
 		// Field name used by Pods for this field (array syntax for rows).
 		$field_name = $this->get_field_name( $name, $options );
 
@@ -500,6 +514,9 @@ class PodsField_Repeater extends PodsField {
 		<div class="pods-form-ui-field pods-form-ui-field-type-repeater pods-form-ui-field-name-<?php echo esc_attr( PodsForm::clean( $name, true ) ); ?> pods-repeater" data-limit="<?php echo esc_attr( $limit ); ?>">
 			<?php if ( '' !== $group_notice ) : ?>
 				<p class="description pods-repeater-group-notice"><?php echo esc_html( $group_notice ); ?></p>
+			<?php endif; ?>
+			<?php if ( '' !== $limit_notice ) : ?>
+				<p class="description pods-repeater-limit-notice"><?php echo esc_html( $limit_notice ); ?></p>
 			<?php endif; ?>
 			<div class="pods-repeater-rows" data-name="<?php echo esc_attr( $field_name ); ?>">
 				<?php foreach ( $rows as $index => $row ) : ?>

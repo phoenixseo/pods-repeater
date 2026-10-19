@@ -192,6 +192,63 @@ class RepeaterLimitTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Formular-Hinweis: gespeicherte Zeilen ueber dem Limit werden gemeldet,
+	 * aber nicht versteckt.
+	 *
+	 * @return void
+	 */
+	public function test_input_warns_when_stored_rows_exceed_limit() {
+		$html = $this->render_input( $this->rows, $this->options_with_limit( 2 ) );
+
+		$this->assertStringContainsString( 'pods-repeater-limit-notice', $html );
+		$this->assertStringContainsString( 'holds 3 rows but allows 2', $html );
+		$this->assertSame(
+			3,
+			$this->count_rows( $html ),
+			'Ueberschuessige Zeilen duerfen nicht aus der Ansicht verschwinden, sonst bearbeitet der Nutzer unbemerkt weniger Daten als gespeichert sind.'
+		);
+	}
+
+	/**
+	 * Kein Hinweis, solange das Limit eingehalten wird.
+	 *
+	 * @return void
+	 */
+	public function test_input_has_no_limit_notice_within_limit() {
+		$html = $this->render_input( array_slice( $this->rows, 0, 2 ), $this->options_with_limit( 2 ) );
+
+		$this->assertStringNotContainsString( 'pods-repeater-limit-notice', $html );
+	}
+
+	/**
+	 * Rendert das Feld ueber input() und gibt das HTML zurueck.
+	 *
+	 * input() echo-t (Pods-Konvention, kein Rueckgabewert).
+	 *
+	 * @param mixed $value   Feldwert.
+	 * @param array $options Feld-Optionen.
+	 *
+	 * @return string
+	 */
+	protected function render_input( $value, $options ) {
+		ob_start();
+		$this->field->input( 'items', $value, $options );
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Zaehlt die gerenderten Zeilen-Container.
+	 *
+	 * @param string $html Gerendertes HTML.
+	 *
+	 * @return int
+	 */
+	protected function count_rows( $html ) {
+		return (int) preg_match_all( '/class="pods-repeater-row"/', $html );
+	}
+
+	/**
 	 * Innerhalb des Limits bleibt der required-Fehler unveraendert.
 	 *
 	 * @return void
