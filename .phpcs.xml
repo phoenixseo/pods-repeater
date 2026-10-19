@@ -54,4 +54,17 @@
 			</property>
 		</properties>
 	</rule>
+
+	<!-- WordPress.WP.Capabilities.Undetermined: Die Feldgruppen-Verwaltung
+	     prüft 'pods_manage' und fällt auf 'manage_options' zurück, wenn Pods
+	     die Capability auf der Installation nicht angelegt hat
+	     (pods_repeater_admin_capability()). Der Sniff kann einen
+	     Laufzeit-Ausdruck nicht auflösen und warnt deshalb an jedem
+	     Aufruf. Die Alternative — die Capability fest zu verdrahten —
+	     würde die Seite auf Installationen ohne Pods-Rollen unbenutzbar
+	     machen. Ausnahme gilt nur für diesen Undetermined-Fall, nicht für
+	     die Prüfung fester Capability-Namen. -->
+	<rule ref="WordPress.WP.Capabilities">
+		<exclude name="WordPress.WP.Capabilities.Undetermined"/>
+	</rule>
 </ruleset>

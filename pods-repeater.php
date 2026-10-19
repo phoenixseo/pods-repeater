@@ -29,6 +29,45 @@ define( 'PODS_REPEATER_URL', plugin_dir_url( __FILE__ ) );
 // Slug, Label und geordneter Feldliste. Unabhängig von Pods ladbar.
 require_once PODS_REPEATER_DIR . 'includes/field-groups.php';
 
+// Feldgruppen-Verwaltung (Admin-Menü unter Pods). Nur im Admin laden:
+// die Datei registriert Hooks und ein admin_post-Endpoint, im Frontend
+// ungenutzt.
+//
+// Zeitpunkt: is_admin() existiert erst, nachdem wp-includes/load.php
+// geladen ist. Beim regulären Plugin-Laden ist das der Fall — hier wird
+// direkt geladen. Läuft der Bootstrap dagegen innerhalb von
+// `muplugins_loaded` (Test-Scaffold, mu-plugin), steht die Funktion noch
+// nicht; dann übernimmt der plugins_loaded-Hook, der danach sicher feuert.
+if ( ! function_exists( 'pods_repeater_load_admin_page' ) ) {
+	/**
+	 * Lädt die Admin-Seite der Feldgruppen — nur im Admin-Kontext, nur einmal.
+	 *
+	 * @return void
+	 */
+	function pods_repeater_load_admin_page() {
+		static $loaded = false;
+
+		if ( $loaded || ! function_exists( 'is_admin' ) || ! is_admin() ) {
+			return;
+		}
+
+		$loaded = true;
+
+		require_once PODS_REPEATER_DIR . 'classes/admin/field-groups-page.php';
+	}
+}
+
+if ( ! has_action( 'plugins_loaded', 'pods_repeater_load_admin_page' ) ) {
+	add_action( 'plugins_loaded', 'pods_repeater_load_admin_page', 5 );
+}
+
+// Regulärer Frontend-Request: der Hook läuft später, aber das Laden hier
+// spart einen Hook-Durchlauf bei jedem Plugin-Ladevorgang. Im Admin
+// (wp-admin) ist is_admin() bereits wahr, das require ist idempotent.
+if ( function_exists( 'is_admin' ) ) {
+	pods_repeater_load_admin_page();
+}
+
 /**
  * Bootstrap: register the custom field type once Pods is loaded.
  *
