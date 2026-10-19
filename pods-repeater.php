@@ -29,6 +29,12 @@ define( 'PODS_REPEATER_URL', plugin_dir_url( __FILE__ ) );
 // Slug, Label und geordneter Feldliste. Unabhängig von Pods ladbar.
 require_once PODS_REPEATER_DIR . 'includes/field-groups.php';
 
+// ACF-kompatible Lese-API (have_rows/the_row/get_sub_field + eigenes
+// Präfix). Registriert die Aliasnamen direkt beim Laden — vor Pods' eigenem
+// ACF-Shim (after_setup_theme), sonst bleiben dessen Stubs (immer false)
+// stehen. Keine Abhängigkeit zu Pods zum Ladezeitpunkt.
+require_once PODS_REPEATER_DIR . 'includes/template-functions.php';
+
 // Feldgruppen-Verwaltung (Admin-Menü unter Pods). Nur im Admin laden:
 // die Datei registriert Hooks und ein admin_post-Endpoint, im Frontend
 // ungenutzt.
