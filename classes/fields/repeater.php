@@ -16,7 +16,11 @@
  * This is the CORE port of the standalone plugin field type
  * (Pods_Repeater_Field in pods-repeater/classes/field-repeater.php): class
  * renamed to the core PodsField_<Type> convention, text domain switched to
- * 'pods'. Logic is identical to the plugin implementation.
+ * 'pods-repeater'. Logic is identical to the plugin implementation.
+ *
+ * NOTE: the Core PR (S10) resets the text domain to the Pods core domain
+ * (pods) when this file is ported upstream. Until then every string here uses
+ * 'pods-repeater' so it matches load_plugin_textdomain() in pods-repeater.php.
  *
  * @package Pods\Fields
  */
@@ -91,8 +95,8 @@ class PodsField_Repeater extends PodsField {
 	 * identisches Muster wie Pods Core (classes/fields/text.php, setup()).
 	 */
 	public function setup() {
-		static::$label = __( 'Repeater (Repeatable Group)', 'pods' );
-		static::$group = __( 'Other', 'pods' );
+		static::$label = __( 'Repeater (Repeatable Group)', 'pods-repeater' );
+		static::$group = __( 'Other', 'pods-repeater' );
 	}
 
 	/**
@@ -123,20 +127,20 @@ class PodsField_Repeater extends PodsField {
 
 		return array(
 			'repeater_group'                    => array(
-				'label'   => __( 'Field Group', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Textdomain bleibt bis S6 'pods'.
-				'help'    => __( 'Wenn gesetzt, kommen die Sub-Felder aus dieser Feldgruppe; das JSON darunter wird ignoriert.', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Siehe S6.
+				'label'   => __( 'Field Group', 'pods-repeater' ),
+				'help'    => __( 'Wenn gesetzt, kommen die Sub-Felder aus dieser Feldgruppe; das JSON darunter wird ignoriert.', 'pods-repeater' ),
 				'type'    => 'pick',
 				'default' => '',
 				'data'    => $group_choices,
 			),
 			'repeater_sub_fields'               => array(
-				'label'   => __( 'Sub-Fields (JSON)', 'pods' ),
-				'help'    => __( 'JSON array of sub-field definitions.', 'pods' ),
+				'label'   => __( 'Sub-Fields (JSON)', 'pods-repeater' ),
+				'help'    => __( 'JSON array of sub-field definitions.', 'pods-repeater' ),
 				'type'    => 'paragraph',
 				'default' => '[]',
 			),
 			'repeater_limit'                    => array(
-				'label'   => __( 'Max rows', 'pods' ),
+				'label'   => __( 'Max rows', 'pods-repeater' ),
 				'type'    => 'number',
 				'default' => 0, // 0 = unlimited
 			),
@@ -144,23 +148,23 @@ class PodsField_Repeater extends PodsField {
 			// Format ist Feldoption, keine hartkodierte Liste. default reiht
 			// die Zeilen mit Komma aneinander, ul/ol als Liste, br mit <br />.
 			'repeater_display_format'           => array(
-				'label'      => __( 'Display Format', 'pods' ),
-				'help'       => __( 'Used as format for front-end display.', 'pods' ),
+				'label'      => __( 'Display Format', 'pods-repeater' ),
+				'help'       => __( 'Used as format for front-end display.', 'pods-repeater' ),
 				'default'    => 'default',
 				'required'   => true,
 				'type'       => 'pick',
 				'data'       => array(
-					'default' => __( 'Item 1, Item 2', 'pods' ),
-					'br'      => __( 'One per line (br HTML tags)', 'pods' ),
-					'ul'      => __( 'Unordered HTML list', 'pods' ),
-					'ol'      => __( 'Ordered HTML list', 'pods' ),
-					'custom'  => __( 'Custom separator', 'pods' ),
+					'default' => __( 'Item 1, Item 2', 'pods-repeater' ),
+					'br'      => __( 'One per line (br HTML tags)', 'pods-repeater' ),
+					'ul'      => __( 'Unordered HTML list', 'pods-repeater' ),
+					'ol'      => __( 'Ordered HTML list', 'pods-repeater' ),
+					'custom'  => __( 'Custom separator', 'pods-repeater' ),
 				),
 				'dependency' => true,
 			),
 			'repeater_display_format_separator' => array(
-				'label'      => __( 'Display Format Separator', 'pods' ),
-				'help'       => __( 'Used as separator for front-end display.', 'pods' ),
+				'label'      => __( 'Display Format Separator', 'pods-repeater' ),
+				'help'       => __( 'Used as separator for front-end display.', 'pods-repeater' ),
 				'depends-on' => array(
 					'repeater_display_format' => 'custom',
 				),
@@ -168,8 +172,8 @@ class PodsField_Repeater extends PodsField {
 				'type'       => 'text',
 			),
 			'disable_dfv'                       => array(
-				'label'   => __( 'Disable DFV', 'pods' ),
-				'help'    => __( 'Render with the PHP input() renderer instead of the React DFV pipeline (required for custom field types without a DFV component).', 'pods' ),
+				'label'   => __( 'Disable DFV', 'pods-repeater' ),
+				'help'    => __( 'Render with the PHP input() renderer instead of the React DFV pipeline (required for custom field types without a DFV component).', 'pods-repeater' ),
 				'type'    => 'boolean',
 				'default' => true,
 			),
@@ -296,7 +300,7 @@ class PodsField_Repeater extends PodsField {
 						'pods_repeater_required',
 						sprintf(
 						/* translators: %s: sub-field label */
-							__( 'Field "%s" is required in every row.', 'pods' ),
+							__( 'Field "%s" is required in every row.', 'pods-repeater' ),
 							$sub['label']
 						)
 					);
@@ -484,13 +488,13 @@ class PodsField_Repeater extends PodsField {
 								<?php $this->render_sub_field_input( $field_name, $index, $sub, $row ); ?>
 							</div>
 						<?php endforeach; ?>
-						<button type="button" class="button pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods' ); ?>">↑</button>
-						<button type="button" class="button pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods' ); ?> " title="<?php esc_attr_e( 'Move down', 'pods' ); ?>">↓</button>
-						<button type="button" class="button pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods' ); ?>" title="<?php esc_attr_e( 'Remove row', 'pods' ); ?>">×</button>
+						<button type="button" class="button pods-repeater-move-up" aria-label="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Move up', 'pods-repeater' ); ?>">↑</button>
+						<button type="button" class="button pods-repeater-move-down" aria-label="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?> " title="<?php esc_attr_e( 'Move down', 'pods-repeater' ); ?>">↓</button>
+						<button type="button" class="button pods-repeater-remove" aria-label="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>" title="<?php esc_attr_e( 'Remove row', 'pods-repeater' ); ?>">×</button>
 					</div>
 				<?php endforeach; ?>
 			</div>
-			<button type="button" class="button pods-repeater-add"><?php esc_html_e( 'Add row', 'pods' ); ?></button>
+			<button type="button" class="button pods-repeater-add"><?php esc_html_e( 'Add row', 'pods-repeater' ); ?></button>
 		</div>
 		<?php
 		// Pods-Konvention: input() echo-t; PodsForm::options() fängt die Ausgabe
@@ -525,7 +529,7 @@ class PodsField_Repeater extends PodsField {
 
 		// Repeater darf nicht in sich selbst verschachtelt werden.
 		if ( 'repeater' === $sub_type ) {
-			echo '<p class="description">' . esc_html__( 'Nested repeaters are not supported.', 'pods' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'Nested repeaters are not supported.', 'pods-repeater' ) . '</p>';
 
 			return;
 		}
@@ -698,7 +702,7 @@ class PodsField_Repeater extends PodsField {
 		}
 
 		if ( empty( $data ) ) {
-			echo '<p class="description">' . esc_html__( 'No options defined for this pick field.', 'pods' ) . '</p>';
+			echo '<p class="description">' . esc_html__( 'No options defined for this pick field.', 'pods-repeater' ) . '</p>';
 
 			return;
 		}
@@ -748,7 +752,7 @@ class PodsField_Repeater extends PodsField {
 			esc_attr( $input_name ),
 			esc_attr( $sub_name )
 		);
-		echo '<option value="">' . esc_html__( '— Select —', 'pods' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— Select —', 'pods-repeater' ) . '</option>';
 		foreach ( $data as $opt_value => $opt_label ) {
 			$opt_value = (string) $opt_value;
 			printf(
@@ -780,7 +784,7 @@ class PodsField_Repeater extends PodsField {
 		}
 		$count = count( $rows );
 		/* translators: %s: number of entries */
-		return sprintf( _n( '%s entry', '%s entries', $count, 'pods' ), number_format_i18n( $count ) );
+		return sprintf( _n( '%s entry', '%s entries', $count, 'pods-repeater' ), number_format_i18n( $count ) );
 	}
 
 	/**
@@ -918,7 +922,7 @@ class PodsField_Repeater extends PodsField {
 
 		return sprintf(
 			/* translators: %s: field group slug */
-			__( 'Die referenzierte Feldgruppe "%s" existiert nicht oder enthält keine Felder.', 'pods' ), // phpcs:ignore WordPress.WP.I18n.TextDomainMismatch -- Textdomain bleibt bis S6 'pods'.
+			__( 'Die referenzierte Feldgruppe "%s" existiert nicht oder enthält keine Felder.', 'pods-repeater' ),
 			$group_slug
 		);
 	}

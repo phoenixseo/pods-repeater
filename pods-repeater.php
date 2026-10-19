@@ -181,6 +181,9 @@ function pods_repeater_screen_hosts_forms( $screen ) {
 	// (field editor, hosts the repeater options dialog) and settings.
 	// Read-only screen detection: no state change, so no nonce required.
 	$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+	// Menü-Slug der Pods-Admin-Seite ('page=pods'), keine Textdomain: dieser
+	// String gehört zu dieser Erkennung und wird beim Domain-Wechsel nicht
+	// angefasst.
 	if ( 'pods' === $page ) {
 		return true;
 	}
