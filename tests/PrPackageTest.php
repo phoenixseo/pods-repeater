@@ -266,4 +266,123 @@ class PrPackageTest extends WP_UnitTestCase {
 			);
 		}
 	}
+
+	/**
+	 * Text des Abschnitts "== Known Limitations ==" aus dem Wurzel-readme.txt.
+	 *
+	 * Gelesen wird das Wurzel-readme, nicht dist/pods-pr/: der
+	 * Paketgenerator (scripts/build-pr-package.sh) kopiert readme.txt nicht,
+	 * er erzeugt nur readme-changelog.txt.
+	 *
+	 * @return string Abschnittstext ohne die folgende Abschnittsueberschrift.
+	 */
+	private function known_limitations_abschnitt() {
+		$readme  = (string) file_get_contents( dirname( __DIR__ ) . '/readme.txt' );
+		$treffer = array();
+
+		if ( 1 !== preg_match( '/^== Known Limitations ==$(.*?)^== /ms', $readme, $treffer ) ) {
+			return '';
+		}
+
+		return $treffer[1];
+	}
+
+	/**
+	 * readme.txt traegt den Abschnitt "== Known Limitations ==" genau einmal,
+	 * zwischen FAQ und Uninstall.
+	 *
+	 * Die Grenzen des Feldtyps sind bewusste Design-Entscheidungen. Ohne den
+	 * Abschnitt liest ein Fremder jede davon als Bug; dieser Test haelt ihn
+	 * vor dem naechsten Umbau fest.
+	 */
+	public function test_known_limitations_abschnitt_steht_an_der_richtigen_stelle() {
+		$readme = (string) file_get_contents( dirname( __DIR__ ) . '/readme.txt' );
+
+		$this->assertSame(
+			1,
+			substr_count( $readme, '== Known Limitations ==' ),
+			'readme.txt muss den Abschnitt "== Known Limitations ==" genau einmal nennen'
+		);
+
+		$faq     = strpos( $readme, "\n== Frequently Asked Questions ==\n" );
+		$grenzen = strpos( $readme, "\n== Known Limitations ==\n" );
+		$deinst  = strpos( $readme, "\n== Uninstall ==\n" );
+
+		$this->assertNotFalse( $faq, 'Abschnitt "== Frequently Asked Questions ==" fehlt' );
+		$this->assertNotFalse( $grenzen, 'Abschnitt "== Known Limitations ==" fehlt' );
+		$this->assertNotFalse( $deinst, 'Abschnitt "== Uninstall ==" fehlt' );
+
+		$this->assertGreaterThan( $faq, $grenzen, 'Known Limitations muss nach den FAQ stehen' );
+		$this->assertGreaterThan( $grenzen, $deinst, 'Known Limitations muss vor Uninstall stehen' );
+	}
+
+	/**
+	 * Der Abschnitt benennt die belegten Grenzen.
+	 *
+	 * `file`/`avatar`/`oembed` (Punkt 1), `nested` (Punkt 2), die
+	 * Admin-only-Registry (Punkt 3), `ACF` (Punkt 4) und den fehlenden
+	 * Block-/REST-Editor (Punkt 5).
+	 */
+	public function test_known_limitations_benennt_die_grenzen() {
+		$abschnitt = $this->known_limitations_abschnitt();
+
+		$this->assertNotSame( '', $abschnitt, 'Abschnitt "== Known Limitations ==" fehlt oder ist leer' );
+
+		$stichworte = array(
+			'file'                 => 'Punkt 1: file als nicht unterstuetztes Sub-Feld',
+			'avatar'               => 'Punkt 1: avatar als nicht unterstuetztes Sub-Feld',
+			'oembed'               => 'Punkt 1: oembed als nicht unterstuetztes Sub-Feld',
+			'nested'               => 'Punkt 2: verschachtelte Repeater',
+			'ACF'                  => 'Punkt 4: keine ACF-Migration',
+			'pods_repeater_save_group' => 'Punkt 3: Registry nur ueber die Admin-Seite',
+		);
+
+		foreach ( $stichworte as $stichwort => $zweck ) {
+			$this->assertStringContainsString( $stichwort, $abschnitt, "Known Limitations nennt \"{$stichwort}\" nicht ({$zweck})" );
+		}
+
+		$this->assertStringContainsString( 'block', strtolower( $abschnitt ), 'Punkt 5 nennt den Block-Editor nicht' );
+	}
+
+	/**
+	 * Die FAQ beantwortet "Can I use a file/image field inside a repeater?"
+	 * und verweist auf den Abschnitt.
+	 */
+	public function test_faq_verweist_auf_known_limitations() {
+		$readme = (string) file_get_contents( dirname( __DIR__ ) . '/readme.txt' );
+
+		$faq_start = strpos( $readme, "\n== Frequently Asked Questions ==\n" );
+		$faq_ende  = strpos( $readme, "\n== Known Limitations ==\n" );
+
+		$this->assertNotFalse( $faq_start, 'Abschnitt "== Frequently Asked Questions ==" fehlt' );
+		$this->assertNotFalse( $faq_ende, 'Abschnitt "== Known Limitations ==" fehlt' );
+
+		$faq = substr( $readme, $faq_start, $faq_ende - $faq_start );
+
+		$this->assertStringContainsString( 'Can I use a file/image field inside a repeater?', $faq, 'FAQ-Frage zu Datei-Feldern fehlt' );
+		$this->assertStringContainsString( 'Known Limitations', $faq, 'FAQ verweist nicht auf den Abschnitt Known Limitations' );
+	}
+
+	/**
+	 * Der Abschnitt behauptet keine Funktion, die der Code nicht hat.
+	 *
+	 * Gegenprobe gegen den Code: `file`, `avatar`, `oembed` und `repeater`
+	 * duerfen nicht in der Whitelist stehen — stuende einer drin, waere der
+	 * entsprechende Known-Limitations-Punkt unwahr und muesste raus. Punkt 2
+	 * haengt an der serverseitigen Ablehnung in der Feldklasse.
+	 */
+	public function test_known_limitations_deckt_sich_mit_der_whitelist() {
+		$erlaubt = pods_repeater_supported_sub_types();
+
+		foreach ( array( 'file', 'avatar', 'oembed', 'repeater' ) as $typ ) {
+			$this->assertNotContains(
+				$typ,
+				$erlaubt,
+				"Whitelist fuehrt \"{$typ}\" — dann waere der Known-Limitations-Punkt unwahr und muesste raus"
+			);
+		}
+
+		$methode = new ReflectionMethod( 'PodsField_Repeater', 'get_nested_repeater_error' );
+		$this->assertTrue( $methode->isProtected(), 'get_nested_repeater_error() fehlt — Punkt 2 (kein Nesting) waere unbelegt' );
+	}
 }

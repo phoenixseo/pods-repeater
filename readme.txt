@@ -55,16 +55,20 @@ Sub-fields are defined as a JSON array in the field's *Sub-Fields (JSON)* option
 ]
 ```
 
-Supported types are the Pods core field types, passed straight through to
-`PodsForm::field_method()`: `text`, `paragraph`, `number`, `website`, `phone`,
-`email`, `password`, `wysiwyg`, `code`, `date`, `time`, `datetime`, `currency`,
-`file`, `avatar`, `oembed`, `pick`, `boolean`, `color`, `slug`, plus the
-display-only types `heading` and `html`.
+Supported sub-field types are the ones in
+`pods_repeater_supported_sub_types()`: `text`, `textarea`, `paragraph`, `number`,
+`website`, `email`, `password`, `wysiwyg`, `code`, `date`, `time`, `datetime`,
+`color`, `boolean` and `pick`. The list is filterable through
+`pods_repeater_supported_sub_types`, so a custom type can be added — but it has
+to render without Pods' React data-flow view (DFV), or the row clone leaves it
+inert. For that reason `file`, `avatar` and `oembed` are not in the list; see
+*Known Limitations* below for the alternatives.
 
 Two names differ from what other page builders call them: Pods uses
 **`website`** where ACF uses `url`, and **`paragraph`** where ACF uses
 `textarea`. There is no `url` or `textarea` field type in Pods 3.x — use the
-core names above.
+core names above (`textarea` is accepted here as an alias that renders through
+Pods' own textarea template).
 
 Use the field *name* to read values: `pods_field( 'my_pod', item_id, 'repeater_field' )` returns an array of rows.
 
@@ -85,6 +89,41 @@ No. Completely empty rows are discarded on save (`pre_save`); only rows with at 
 = Where is the value stored? =
 
 As a JSON string (for example `[{"subtitle":"Erste Zeile","link":"https://example.com/1"}]`) under the field's meta key, and decoded back to an array when read through Pods.
+
+= Can I use a file/image field inside a repeater? =
+
+Not as a sub-field of the row. `file`, `avatar` and `oembed` are the Pods field types that render through the React data-flow view (DFV), and the repeater does not support DFV-backed sub-fields — saving a field group that contains one is rejected with `unsupported type "file"`. Use a regular Pod field next to the repeater, or store an attachment ID per row in a `number` / `text` sub-field. Details and the working alternative are in *Known Limitations* below.
+
+== Known Limitations ==
+
+These are the edges a new user usually hits first. Each one is a deliberate scope decision, not an open bug — the code refuses these cases instead of half-supporting them.
+
+= `file`, `avatar` and `oembed` are not supported sub-field types =
+
+The whitelist in `pods_repeater_supported_sub_types()` (`includes/field-groups.php`) has no entry for `file`, `avatar` or `oembed`. Saving a field group that declares one is rejected with a `pods_repeater_invalid_type` error: `Field "cover" uses the unsupported type "file".`
+
+The reason is the renderer, not the storage. Those three types render through Pods' React data-flow view and put their field name only into the `pods-dfv-field-data` JSON blob, not into a `name="..."` attribute a form POST can read. The repeater builds a new row by cloning the first one (`template.cloneNode(true)`, `ui/js/repeater.js`); the clone carries the same `data-item-id` / `form-counter` as the original, and Pods' React editor does not initialise a second instance from it. From row 2 on the file picker would be dead markup. Refusing the type up front is the honest behaviour.
+
+Two ways that work:
+
+* Put the file / image field on the Pod as a **normal field next to the repeater**, not inside the row. Use it as a fallback or a shared value.
+* Store the **attachment ID per row** in a `number` or `text` sub-field and resolve it in your template with `wp_get_attachment_image( $row['image_id'], 'large' )`.
+
+= Repeaters do not nest =
+
+A repeater cannot contain another repeater as a sub-field. This is enforced server-side, not only in the UI: a sub-field configuration with a `repeater` entry is rejected with an error that names the offending sub-field, and `pre_save()` drops the values of such sub-fields so a save through the API or an import cannot smuggle one in. Model deeper structures as a second repeater field on the Pod, or store a nested JSON array in a `code` / `text` sub-field and decode it yourself.
+
+= Field groups are managed in the admin only =
+
+Reusable field groups (the `repeater_group` registry) are created and edited under **Pods → Field Groups**. There is no REST route, no WP-CLI command and no `pods_api()` call that creates or edits a group, and there is no export/import. The saving function `pods_repeater_save_group()` is a plain PHP function — it is the code path the admin screen uses, but it is not exposed as an endpoint. On a site where the admin is not available, define the sub-fields inline as the field's *Sub-Fields (JSON)* option instead of a shared group.
+
+= No ACF data migration =
+
+Existing ACF repeater data is not imported. The field stores its own JSON format (`[{"subtitle":"…","link":"…"}]`) under its own meta key, so an ACF repeater and a Pods repeater field of the same name do not share values. What the plugin does provide is ACF-compatible *reading*: `have_rows()`, `the_row()` and `get_sub_field()` are available as aliases, so an ACF-style template keeps working once the data lives in a repeater field. Moving data across is a manual step.
+
+= No block editor or REST editor UI =
+
+The admin UI is server-rendered PHP plus plain JavaScript, deliberately, so the plugin needs no build pipeline and no external assets. There is no block registration and no custom REST field handling: in Gutenberg or through the REST API the field appears as its raw JSON value, not as the row editor. Edit repeaters in the classic Pods field UI.
 
 == Uninstall ==
 
@@ -125,6 +164,8 @@ Nothing but those two options. The plugin creates no database tables, no custom 
 * `languages/pods-repeater.pot` generated with `wp i18n make-pot` (69 strings), so the `Domain Path` header points at a real folder.
 * Requirements now carry the evidence, not an estimate: `Requires at least: 6.8` because the whole suite runs against the wp-phpunit test library for WordPress 6.8.2 and the code itself uses no API newer than 6.8. `Tested up to: 7.1` because the demo instance on WordPress 7.1.3 with Pods 3.3.9.1 has the field type registered, field groups, admin UI and frontend exercised end to end. Both `readme.txt` and the plugin header carry the same numbers, and a test now keeps them in sync.
 * `Requires PHP: 7.4` is measured under both ends of the range: the suite passes on PHP 7.4.33 and on PHP 8.3.33 against the same WordPress 6.8.2 core. No PHP-8-only syntax is used.
+* Added a **Known Limitations** section naming the five edges a new user hits first — no `file` / `avatar` / `oembed` sub-fields, no nested repeaters, field groups via the admin only, no ACF data migration, no block/REST editor UI — each with the working alternative. The FAQ answers the file-field question that comes up first in support.
+* Corrected the list of supported sub-field types: it advertised `file`, `avatar`, `oembed`, `phone`, `currency` and `slug`, none of which are in the whitelist. It now matches `pods_repeater_supported_sub_types()`.
 
 = 0.2.0 =
 * Field group registry: reusable sub-field sets (`repeater_group`), plus the read API `pods_repeater_get_groups()` and `pods_repeater_get_group_fields()`.
