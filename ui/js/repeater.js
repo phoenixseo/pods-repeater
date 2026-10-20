@@ -148,7 +148,9 @@
 
 	// Whitelist mirrors the Pods field types the server-side pipeline can
 	// render (PodsForm::field_types() in the test instance). 'repeater' is
-	// intentionally absent: nested repeaters are rejected server-side.
+	// intentionally absent: nested repeaters are rejected server-side in
+	// classes/fields/repeater.php (validate()) and stripped in pre_save()
+	// for write paths that skip validation.
 	const SUBFIELD_TYPES = [
 		'avatar', 'boolean', 'code', 'color', 'currency', 'date', 'datetime',
 		'email', 'file', 'heading', 'html', 'number', 'oembed', 'paragraph',

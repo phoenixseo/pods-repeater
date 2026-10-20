@@ -80,13 +80,6 @@ class PodsField_Repeater extends PodsField {
 	public static $pod_types = array( 'post_type', 'user', 'comment', 'settings' );
 
 	/**
-	 * Constructor: call parent init (loads $this->pod_types etc.).
-	 */
-	public function __construct() {
-		parent::__construct();
-	}
-
-	/**
 	 * Initial setup: translate the static type label.
 	 *
 	 * PodsField::__construct() ruft setup() auf; field_loader() liest die
@@ -242,6 +235,13 @@ class PodsField_Repeater extends PodsField {
 	 */
 	public function pre_save( $value, $id = null, $name = null, $options = null, $fields = null, $pod = null, $params = null ) {
 		if ( is_array( $value ) ) {
+			// Verschachtelte Repeater verwerfen, bevor irgendetwas persistiert:
+			// validate() lehnt sie ab, aber REST und pods()->save() können
+			// daran vorbeischreiben. Nur das betroffene Sub-Feld fällt weg
+			// (dieselbe Struktur, die validate() meldet); die Zeile selbst
+			// bleibt erhalten, damit keine Daten unbemerkt verschwinden.
+			$value = $this->strip_nested_repeater_values( $value, $options );
+
 			// Vollständig leere Zeilen verwerfen: input() seedet bei leerem Wert
 			// eine leere Template-Zeile (Judge-Review 24e355c, Empfehlung 1) — die
 			// darf nie als '[{}]'-Zeile persistieren (würde mit required-Sub-Feldern
@@ -275,6 +275,80 @@ class PodsField_Repeater extends PodsField {
 	}
 
 	/**
+	 * Raised when the sub-field configuration contains a nested repeater
+	 * (`type` = 'repeater' in the inline `repeater_sub_fields` JSON).
+	 *
+	 * The field-group whitelist (includes/field-groups.php, the supported
+	 * sub-types function) already excludes 'repeater', but the inline JSON
+	 * path bypasses that registry entirely. A nested repeater would hand
+	 * an array value to a sub-field pipeline that expects scalars, so the
+	 * structure is rejected on read and stripped on write.
+	 *
+	 * @param array $sub_fields Sub-field definitions (from get_sub_fields()).
+	 *
+	 * @return string Error message, or '' when no sub-field is a repeater.
+	 */
+	protected function get_nested_repeater_error( $sub_fields ) {
+		foreach ( $sub_fields as $sub ) {
+			if ( ! is_array( $sub ) || ! isset( $sub['type'] ) || 'repeater' !== $sub['type'] ) {
+				continue;
+			}
+
+			$label = isset( $sub['label'] ) && '' !== (string) $sub['label'] ? (string) $sub['label'] : '';
+			if ( '' === $label ) {
+				$label = isset( $sub['name'] ) ? (string) $sub['name'] : '';
+			}
+
+			return sprintf(
+				/* translators: %s: sub-field label */
+				__( 'Nested repeaters are not supported: "%s".', 'pods-repeater' ),
+				$label
+			);
+		}
+
+		return '';
+	}
+
+	/**
+	 * Write-path guard: drop the values of sub-fields that are nested
+	 * repeaters (see get_nested_repeater_error() for why this exists).
+	 *
+	 * Only the offending keys are removed from each row; the row and its
+	 * other sub-field values survive. Row count and order are untouched, so
+	 * the limit logic in pre_save() still sees the same rows.
+	 *
+	 * @param array $rows    Rows as passed to pre_save().
+	 * @param array $options Field options.
+	 *
+	 * @return array Rows without nested-repeater values.
+	 */
+	protected function strip_nested_repeater_values( $rows, $options = null ) {
+		$sub_fields = $this->get_sub_fields( $options );
+		if ( empty( $sub_fields ) || '' === $this->get_nested_repeater_error( $sub_fields ) ) {
+			return $rows;
+		}
+
+		$nested_names = array();
+		foreach ( $sub_fields as $sub ) {
+			if ( is_array( $sub ) && isset( $sub['type'] ) && 'repeater' === $sub['type'] && isset( $sub['name'] ) ) {
+				$nested_names[] = (string) $sub['name'];
+			}
+		}
+
+		foreach ( $rows as $index => $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+
+			foreach ( $nested_names as $nested_name ) {
+				unset( $rows[ $index ][ $nested_name ] );
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Validate: check required sub-fields before saving.
 	 *
 	 * Rückgabe-Vertrag von Pods (siehe PodsField_Text::validate() und
@@ -302,6 +376,17 @@ class PodsField_Repeater extends PodsField {
 			return true; // Nothing to validate.
 		}
 		$sub_fields = $this->get_sub_fields( $options );
+
+		// Verschachtelte Repeater zuerst ablehnen: ein Sub-Feld vom Typ
+		// 'repeater' ist ein struktureller Fehler in der Feldkonfiguration,
+		// grundlegender als eine fehlende Pflichtangabe oder zu viele Zeilen.
+		// Die Feldgruppen-Registry schliesst 'repeater' bereits aus (die
+		// Whitelist in includes/field-groups.php), die Inline-JSON-Variante
+		// geht aber an ihr vorbei — bis hierher gab es keine Durchsetzung.
+		$nested_error = $this->get_nested_repeater_error( $sub_fields );
+		if ( '' !== $nested_error ) {
+			return array( $nested_error );
+		}
 
 		// Max-Zeilen prüfen, bevor die Sub-Feld-Regeln greifen: zu viele
 		// Zeilen sind der grundlegendere Fehler und werden gemeldet statt
