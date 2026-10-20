@@ -175,9 +175,8 @@
 		{ key: 'type', label: 'Type', type: 'select' },
 		{ key: 'label', label: 'Label', placeholder: 'My Field' }
 	];
-	// Verifizierte Wirk-Matrix (2026-09-07, Spike tests/spike-subfield-option-verify.php
-	// gegen die echte Pipeline render_sub_field_input()/render_sub_field_pick();
-	// erweitert 2026-09-08 per tests/spike-option-verify-extended.php):
+	// Verifizierte Wirk-Matrix (2026-09-07/08 gegen die echte Pipeline
+	// render_sub_field_input()/render_sub_field_pick() gemessen):
 	// placeholder greift bei allen Text-ähnlichen; maxlength zusätzlich bei text/
 	// paragraph/code/slug/password/email; pick liest data/pick_format_type/
 	// pick_format_type_single; default ist ein NO-OP (Server füllt nur Row-Werte)

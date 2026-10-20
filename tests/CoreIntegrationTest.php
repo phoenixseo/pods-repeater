@@ -9,9 +9,9 @@
  * ein späterer Kern-Umbau sie nicht still bricht.
  *
  * Woher die Erwartungen stammen: jede Assertion ist an der echten
- * Implementierung gemessen (Probe tests/spike-s13-core.php), nicht aus der
- * Doku abgeleitet. Kern-Dateien, auf die sich die Zusagen stützen
- * (Pods 3.3.9.1, nur lesen):
+ * Implementierung gemessen (Pods 3.3.9.1, per `wp eval` gegen die laufende
+ * Installation geprüft), nicht aus der Doku abgeleitet. Kern-Dateien, auf die
+ * sich die Zusagen stützen (Pods 3.3.9.1, nur lesen):
  *
  *   - classes/PodsForm.php:1654 register_field_type() → field_loader(),
  *     schreibt self::$field_types[ $type ] (1663) und cached per Transient.

@@ -241,7 +241,7 @@ class TemplateFunctionsTest extends WP_UnitTestCase {
 	 *
 	 * Regressionstest für einen real gefundenen Fehler: der Vorlauf-Aufruf
 	 * im `if` hatte den Schleifenzeiger verbraucht, sodass die erste Zeile
-	 * fehlte (Spike tests/spike-s9-sequence.php zeigte ["Beta","Gamma"]).
+	 * fehlte (die Messung an der echten Pipeline zeigte ["Beta","Gamma"]).
 	 *
 	 * @return void
 	 */
@@ -475,8 +475,10 @@ class TemplateFunctionsTest extends WP_UnitTestCase {
 	 *   (b) Echter Prozess-Nachweis: ein mu-plugin setzt den Filter VOR dem
 	 *       Plugin-Laden (mu-plugins laden vor Plugins). Ergebnis im
 	 *       CLI-Prozess: `have_rows`/`get_sub_field` bleiben bei Pods'
-	 *       Shim, `the_row` bleibt frei. Reproduzierbar über
-	 *       tests/spike-s9-aliases-off-muplugin.php.
+	 *       Shim, `the_row` bleibt frei. Nachgestellt in einem Wegwerf-
+	 *       mu-plugin, das den Filter vor dem Plugin-Laden setzt — nicht
+	 *       Teil der Suite, weil es die Testumgebung dauerhaft verändern
+	 *       würde.
 	 *
 	 * Beides zusammen belegt den Abschalter; (b) allein wäre nicht
 	 * automatisierbar, ohne die Testumgebung dauerhaft zu verändern.

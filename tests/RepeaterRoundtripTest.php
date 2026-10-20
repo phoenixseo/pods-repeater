@@ -4,8 +4,8 @@
  *
  * Erste echte Testklasse auf der eigenständigen WP-Testbasis
  * (wp-phpunit 6.8.2 + PHPUnit 9.6, siehe tests/bootstrap.php). Inhaltliche
- * Vorlage: tests/spike-t5.php + tests/spike-t6b-roundtrip.php (dort
- * verifizierte Save-Signatur: save_pod_item mit 'data' + 'from' => 'save').
+ * Vorlage: Wegwerf-Proben an der echten Installation (dort verifizierte
+ * Save-Signatur: save_pod_item mit 'data' + 'from' => 'save').
  *
  * Klassenname: seit dem Core-Port (9fce5a3) heißt der Feldtyp
  * PodsField_Repeater (classes/fields/repeater.php), nicht mehr

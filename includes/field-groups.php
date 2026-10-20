@@ -43,11 +43,12 @@ const PODS_REPEATER_GROUPS_SCHEMA_VERSION = 1;
  * Die Liste ist verifiziert (19.10.2026) gegen den echten Produktiv-Pfad
  * PodsField_Repeater::render_sub_field_input(): jeder Typ rendert dort ein
  * Eingabeelement mit name="<feld>[<idx>][<sub>]" und ohne DFV-React-Mount
- * (Spike tests/spike-type-whitelist.php + spike-type-whitelist-extra.php).
+ * (gemessen an einer Wegwerf-Instanz mit allen Pods-Feldtypen: genau diese
+ * Typen rendern, alle anderen nicht).
  *
  * Bewusst NICHT enthalten:
  * - url:   kein Pods-Feldtyp (Pods nennt ihn 'website'); ui/fields/url.php
- *          existiert nicht, der Name fällt in den DFV-Fallback (Spike: kein
+ *          existiert nicht, der Name fällt in den DFV-Fallback (gemessen: kein
  *          name-Attribut, pods-dfv-field-data vorhanden). Ersatz: 'website'.
  * - select/radio/checkbox: eigener Pods-Typ 'pick' (rendert mit data nativ,
  *          ohne data nur ein Hinweis-Absatz).

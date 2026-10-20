@@ -3,8 +3,8 @@
  * Rückgabevertrag der Feldtyp-Klasse `repeater` belegen.
  *
  * Woher die Erwartungen stammen: jede Assertion ist an der echten
- * Implementierung gemessen (Probes tests/spike-s12*.php, Pods 3.3.9.1,
- * WordPress 6.8.2), nicht aus der Doku geraten. Gemessene Fakten:
+ * Implementierung gemessen (Pods 3.3.9.1, WordPress 6.8.2), nicht aus der
+ * Doku geraten. Gemessene Fakten:
  *
  *   - validate() liefert bei zu vielen Zeilen ein ARRAY mit einem String
  *     ("This field allows at most 2 rows."), nie einen WP_Error.

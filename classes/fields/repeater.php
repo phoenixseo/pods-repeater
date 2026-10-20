@@ -198,7 +198,8 @@ class PodsField_Repeater extends PodsField {
 	 * Value preparation ON READ: JSON string → array.
 	 *
 	 * Called by Pods when the value comes from the DB. We decode here so that
-	 * pods_field() / $pod->field() returns an array (spike criterion 4).
+	 * pods_field() / $pod->field() returns an array (measured against Pods
+	 * 3.3.9.1, criterion 4 of the read-path contract).
 	 * Careful: pipeline calls (value → format → display) — only decode when
 	 * is_string() && json_decode() is valid; otherwise pass $value through.
 	 *

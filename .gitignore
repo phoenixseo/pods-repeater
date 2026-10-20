@@ -12,6 +12,9 @@
 /build/
 /dist/
 
+# Projekt-Archiv (Pods-Quellzip fuer watch-pods-install.sh, 2,6 MB, nicht versionieren)
+/assets/
+
 # Python-Bytecode der Porter-Skripte (scripts/*.py), generiert
 __pycache__/
 *.pyc
