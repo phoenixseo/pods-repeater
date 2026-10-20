@@ -3,12 +3,12 @@
     "description": "Pods repeater field type (repeatable group) - dev tooling for the standalone WPUnit test base.",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
-    "require": {},
     "require-dev": {
         "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
         "phpunit/phpunit": "^9.6",
         "stellarwp/coding-standards": "^1.0",
         "wp-coding-standards/wpcs": "^3.1",
+        "wp-phpunit/wp-phpunit": "6.8.2",
         "yoast/phpunit-polyfills": "^2.0"
     },
     "config": {

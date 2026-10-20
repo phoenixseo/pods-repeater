@@ -12,7 +12,7 @@
 /build/
 /dist/
 
-# Projekt-Archiv (Pods-Quellzip fuer watch-pods-install.sh, 2,6 MB, nicht versionieren)
+# Projekt-Archiv: Pods-Quellzip (2,6 MB) fuer den lokalen Testaufbau
 /assets/
 
 # Python-Bytecode der Porter-Skripte (scripts/*.py), generiert
@@ -22,7 +22,7 @@ __pycache__/
 # PHPUnit (WPUnit-Testbasis)
 /.phpunit.cache/
 .phpunit.result.cache
-# WP-Test-Lib ist eine nachgezogene Lib (18 MB) — nicht versionieren
+# WP-Test-Lib (18 MB) wird nachgezogen, nicht versioniert
 /tests/wp-tests/
 
 # OS / editor

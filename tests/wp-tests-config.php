@@ -16,8 +16,9 @@
  * @package PodsRepeater
  */
 
-// WP-Codebasis im wp-env-Container (Pflicht: Backslash am Ende).
-define( 'ABSPATH', '/var/www/html/' );
+// WP-Codebasis (Pflicht: Slash am Ende). Default ist der wp-env-Container;
+// die CI setzt WP_TEST_ABSPATH auf ihr eigenes Verzeichnis.
+define( 'ABSPATH', rtrim( getenv( 'WP_TEST_ABSPATH' ) ?: '/var/www/html', '/' ) . '/' );
 
 // Pflichtkonstanten der WP-Test-Lib (inkl. tests/phpunit/includes/bootstrap.php).
 define( 'WP_TESTS_DOMAIN', 'example.org' );
@@ -25,7 +26,7 @@ define( 'WP_TESTS_EMAIL', 'admin@example.org' );
 define( 'WP_TESTS_TITLE', 'Test Blog' );
 
 // PHP-Binary für den Install-Subprozess (lib installiert WP in die Test-DB).
-define( 'WP_PHP_BINARY', '/usr/local/bin/php' );
+define( 'WP_PHP_BINARY', getenv( 'WP_TEST_PHP_BINARY' ) ?: PHP_BINARY );
 
 // Kein Multisite.
 define( 'WP_TESTS_MULTISITE', false );
@@ -35,10 +36,10 @@ define( 'WP_TESTS_MULTISITE', false );
  * wp-env-Netzwerk), root mit Passwort „password" (wp-env-Default,
  * MYSQL_ROOT_HOST=%).
  */
-define( 'DB_NAME', 'wp-tests' );
-define( 'DB_USER', 'root' );
-define( 'DB_PASSWORD', 'password' );
-define( 'DB_HOST', 'mysql' );
+define( 'DB_NAME', getenv( 'WP_TEST_DB_NAME' ) ?: 'wp-tests' );
+define( 'DB_USER', getenv( 'WP_TEST_DB_USER' ) ?: 'root' );
+define( 'DB_PASSWORD', getenv( 'WP_TEST_DB_PASSWORD' ) ?: 'password' );
+define( 'DB_HOST', getenv( 'WP_TEST_DB_HOST' ) ?: 'mysql' );
 define( 'DB_CHARSET', 'utf8mb4' );
 define( 'DB_COLLATE', '' );
 

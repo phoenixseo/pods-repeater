@@ -1,10 +1,15 @@
 # Pods Repeater Field
 
+[![Tests](https://github.com/phoenixseo/pods-repeater/actions/workflows/tests.yml/badge.svg)](https://github.com/phoenixseo/pods-repeater/actions/workflows/tests.yml)
+
 Repeatable field groups for [Pods](https://pods.io) — the feature ACF calls a "Repeater", as a standalone field type.
 
 Pods can repeat a *single* value. It cannot repeat a *group* of fields. This plugin adds a `repeater` field type: you define a set of sub-fields once, and the editor can add, remove and reorder rows of them.
 
 **Status: `0.3.0-alpha`.** It works and it is tested, but it has not seen much use outside this repository. Read [Known limitations](#known-limitations) before you build on it.
+
+**Support:** issues are read, but there is no support promise and no release schedule. This is a one-person alpha published because the feature is missing from Pods, not a product.
+
 
 ## Why this exists
 
@@ -76,11 +81,15 @@ date, time, datetime, color, boolean, pick
 ## Development
 
 ```bash
-npx wp-env start
-npx wp-env run cli --env-cwd=wp-content/plugins/pods-repeater vendor/bin/phpunit --testsuite PodsRepeater
+composer install                 # PHPUnit, PHPCS, WordPress PHPUnit test library
+npx wp-env start                 # WordPress + Pods 3.3.9.1 + this plugin
+
+# inside the wp-env container:
+vendor/bin/phpunit --testsuite PodsRepeater
+vendor/bin/phpcs pods-repeater.php includes classes ui
 ```
 
-127 tests, 2455 assertions, green on PHP 7.4 and 8.3. The suite uses the WordPress PHPUnit test library (6.8.2) with Pods loaded from the running instance.
+127 tests, 2455 assertions, green on PHP 7.4 and 8.3 (GitHub Actions runs both). The suite boots the WordPress PHPUnit test library against a real WordPress installation with Pods loaded from `wp-content/plugins/pods`; `tests/wp-tests-config.php` takes the paths and database credentials from the environment, so the same tests run under wp-env and in CI.
 
 `scripts/build-release-package.sh` builds the release zip from an allowlist. `scripts/verify-pr-package.sh` checks the portable copy of the field class against the source, so the file meant for a core PR cannot drift from the plugin.
 

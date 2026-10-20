@@ -24,21 +24,35 @@
  * @package PodsRepeater
  */
 
-// 1) WP-Test-Lib lokalisieren (tests/wp-tests/ im Plugin-Repo).
-$wp_tests_dir = __DIR__ . '/wp-tests';
+// 1) WP-Test-Lib lokalisieren: composer-vendor (Standard), tests/wp-tests/
+//    (aelterer lokaler Aufbau) oder WP_TESTS_DIR als Uebersteuerung.
+$wp_tests_candidates = array(
+	getenv( 'WP_TESTS_DIR' ) ?: '',
+	dirname( __DIR__ ) . '/vendor/wp-phpunit/wp-phpunit',
+	__DIR__ . '/wp-tests',
+);
+$wp_tests_dir = '';
+foreach ( $wp_tests_candidates as $wp_tests_candidate ) {
+	if ( '' !== $wp_tests_candidate && file_exists( $wp_tests_candidate . '/includes/functions.php' ) ) {
+		$wp_tests_dir = $wp_tests_candidate;
+		break;
+	}
+}
 
-if ( ! file_exists( $wp_tests_dir . '/includes/functions.php' ) ) {
+if ( '' === $wp_tests_dir ) {
 	fprintf(
 		STDERR,
-		"Error: WP-Test-Lib fehlt unter %s.\nErwartet: wp-phpunit 6.8.2 (includes/functions.php).\n",
-		$wp_tests_dir
+		"Error: WP-Test-Lib nicht gefunden.\nErwartet: vendor/wp-phpunit/wp-phpunit (composer install) oder tests/wp-tests/.\n"
 	);
 	exit( 1 );
 }
 
-// 2) Shim-Konfiguration: echte wp-tests-config + Tabellen-Präfix.
+// 2) Konfiguration direkt adressieren. Die Test-Lib sucht wp-tests-config.php
+//    sonst neben sich selbst; mit dieser Konstante gilt unsere Datei, egal ob
+//    die Lib aus tests/wp-tests/ oder aus vendor/wp-phpunit/ geladen wird.
 putenv( 'WP_PHPUNIT__TESTS_CONFIG=' . __DIR__ . '/wp-tests-config.php' );
 putenv( 'WP_PHPUNIT__TABLE_PREFIX=wptests_' );
+define( 'WP_TESTS_CONFIG_FILE_PATH', __DIR__ . '/wp-tests-config.php' );
 
 // 3) PHPUnit-Polyfills (yoast/phpunit-polyfills, require-dev in composer.json).
 define( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH', dirname( __DIR__ ) . '/vendor/yoast/phpunit-polyfills' );

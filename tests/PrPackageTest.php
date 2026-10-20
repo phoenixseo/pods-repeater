@@ -160,7 +160,11 @@ class PrPackageTest extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'PodsRepeaterNestedTest.php', $check, 'Checkliste nennt den Nested-Test nicht' );
 		// Absolute Pfade des Quellrepos haben im Paket nichts zu suchen: der
 		// Test laeuft beim Maintainer in einem anderen Verzeichnisbaum.
-		$this->assertStringNotContainsString( '/home/hermes', $src . $desc . $check, 'Absoluter Pfad aus dem Quellrepos steht im Paket' );
+		$this->assertDoesNotMatchRegularExpression(
+			'#(?:/home/|/Users/|\\\\Users\\\\|/root/)[A-Za-z0-9._-]+/#',
+			$src . $desc . $check,
+			'Absoluter Home-Pfad aus dem Quellrepos steht im Paket'
+		);
 		$this->assertStringNotContainsString(
 			'validate()` (ab Z. 288) filtert den Sub-Typ **nicht**',
 			$check,
