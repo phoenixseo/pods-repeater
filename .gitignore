@@ -32,3 +32,6 @@ __pycache__/
 # Release-Artefakte: haengen an GitHub-Releases, nicht in die History
 /dist/release/*.zip
 /dist/release/*.manifest.txt
+
+# Generiertes (build-pr-package.sh / Handbauten) nie versionieren
+/dist/
