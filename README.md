@@ -11,6 +11,19 @@ Pods can repeat a *single* value. It cannot repeat a *group* of fields. This plu
 **Support:** issues are read, but there is no support promise and no release schedule. This is a one-person alpha published because the feature is missing from Pods, not a product.
 
 
+## What it looks like
+
+Two repeaters on one Pod — a track list and the pressings of a record. Both
+tables are repeater rows rendered in a template, not hard-coded markup:
+
+| Track list (10 rows) | Pressings (2 rows) |
+|---|---|
+| [<img src="docs/screenshots/dark-side-of-the-moon.png" width="400" alt="Track list of a record rendered from a repeater field">](docs/screenshots/dark-side-of-the-moon.png) | [<img src="docs/screenshots/trans-europa-express.png" width="400" alt="Pressing list of a record rendered from a repeater field">](docs/screenshots/trans-europa-express.png) |
+
+*The demo record collection (`scripts/demo/`) is deliberately concrete: real
+albums and real track lists, so a reviewer can tell whether the data survives a
+round trip. Catalogue numbers and pressing years are illustrative.*
+
 ## Why this exists
 
 Repeatable field groups have been requested in Pods for years ([Issue #109](https://github.com/pods-framework/pods/issues/109), [Discussion #7238](https://github.com/pods-framework/pods/discussions/7238)) and are still not in core. This plugin implements the feature outside of core: usable now, adoptable into core later if the maintainers want it.
