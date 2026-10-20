@@ -161,6 +161,16 @@ function pods_repeater_admin_render_page() {
 
 	echo '<div class="wrap pods-repeater-field-groups">';
 
+	// BEFUND S18: Erfolgs-Notices wurden im Formular nur mit $form=true
+	// abgefragt (also nur Fehler) — "gespeichert" war danach unsichtbar,
+	// der Nutzer bekam keine Rückmeldung. Hier vor der Ansicht ausgeben,
+	// damit Erfolg und Fehler beide erscheinen.
+	$page_notice = pods_repeater_admin_take_notice();
+
+	if ( '' !== $page_notice ) {
+		echo $page_notice; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- bereits escaped in pods_repeater_admin_notice().
+	}
+
 	if ( $is_form ) {
 		printf(
 			'<h1 class="wp-heading-inline">%s</h1> <a href="%s" class="page-title-action">%s</a><hr class="wp-header-end">',
@@ -194,10 +204,30 @@ function pods_repeater_admin_render_page() {
 function pods_repeater_admin_page_url( $args = array() ) {
 	$args = is_array( $args ) ? $args : array();
 
-	return add_query_arg(
+	// add_query_arg() ueberspringt Argumente mit LEEREM Wert. Ein leerer Slug
+	// (neue Gruppe) wuerde also aus der URL verschwinden — bei "slug" ist das
+	// fatal, weil admin.php?page=…&slug ohne Wert die Formularansicht fuer
+	// eine neue Gruppe liefert, aber nicht mehr unterscheidbar ist.
+	// Deshalb: leerer String explizit anhaengen.
+	$empty = array();
+
+	foreach ( $args as $key => $value ) {
+		if ( '' === $value || null === $value ) {
+			$empty[ $key ] = '';
+			unset( $args[ $key ] );
+		}
+	}
+
+	$url = add_query_arg(
 		array_merge( array( 'page' => PODS_REPEATER_GROUPS_PAGE ), $args ),
 		admin_url( 'admin.php' )
 	);
+
+	foreach ( $empty as $key => $value ) {
+		$url .= '&' . rawurlencode( (string) $key ) . '=';
+	}
+
+	return $url;
 }
 
 /**
@@ -284,7 +314,12 @@ function pods_repeater_admin_render_form( $slug = '' ) {
 	$group  = '' !== $slug ? pods_repeater_get_group( $slug ) : null;
 	$fields = ( is_array( $group ) && isset( $group['fields'] ) && is_array( $group['fields'] ) ) ? $group['fields'] : array();
 	$label  = ( is_array( $group ) && isset( $group['label'] ) ) ? (string) $group['label'] : '';
-	$action = pods_repeater_admin_page_url( array( 'slug' => $slug ) );
+
+	// BEFUND S18: das Formular postete auf admin.php, wo kein Save-Handler
+	// haengt (nur admin_post_pods_repeater_group_save). Der Browser hat den
+	// POST still verworfen: Nutzer füllt aus, klickt, nichts wird gespeichert,
+	// keine Fehlermeldung. Ziel ist deshalb der admin-post-Endpunkt.
+	$action = add_query_arg( 'action', 'pods_repeater_group_save', admin_url( 'admin-post.php' ) );
 
 	ob_start();
 
