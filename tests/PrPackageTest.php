@@ -69,6 +69,7 @@ class PrPackageTest extends WP_UnitTestCase {
 			'tests/wpunit/PodsRepeaterTest.php',
 			'tests/wpunit/PodsRepeaterContractTest.php',
 			'tests/wpunit/PodsRepeaterCoreIntegrationTest.php',
+			'tests/wpunit/PodsRepeaterNestedTest.php',
 			'readme-changelog.txt',
 			'PR-BESCHREIBUNG.md',
 			'DISCUSSION-KOMMENTAR.md',
@@ -91,6 +92,7 @@ class PrPackageTest extends WP_UnitTestCase {
 			'RepeaterLimitTest.php'   => 'PodsRepeaterTest.php',
 			'RepeaterContractTest.php' => 'PodsRepeaterContractTest.php',
 			'CoreIntegrationTest.php'  => 'PodsRepeaterCoreIntegrationTest.php',
+			'RepeaterNestedTest.php'   => 'PodsRepeaterNestedTest.php',
 		);
 
 		$repo_root = dirname( __DIR__ );
@@ -118,7 +120,7 @@ class PrPackageTest extends WP_UnitTestCase {
 
 		// Der Gesamtwert ist die Zusage in PR-Beschreibung und Discussion-
 		// Kommentar; beide Textdateien muessen ihn nennen.
-		$this->assertGreaterThanOrEqual( 33, $gesamt, "Nur {$gesamt} Testmethoden im Paket" );
+		$this->assertGreaterThanOrEqual( 40, $gesamt, "Nur {$gesamt} Testmethoden im Paket (erwartet 10+19+4+7)" );
 
 		$this->assertStringContainsString(
 			$gesamt . ' Testmethoden',
@@ -129,6 +131,40 @@ class PrPackageTest extends WP_UnitTestCase {
 			$gesamt . ' Testmethoden',
 			file_get_contents( $this->out_dir . '/DISCUSSION-KOMMENTAR.md' ),
 			"Discussion-Kommentar nennt die Testzahl {$gesamt} nicht"
+		);
+	}
+
+	/**
+	 * Die Zusage "verschachtelte Repeater werden serverseitig abgelehnt" steht
+	 * im Paket — mit dem Test daneben, der sie belegt. Ohne diesen Test waere
+	 * die Aussage in den Dokumenten eine Behauptung.
+	 */
+	public function test_nested_zusage_ist_belegt() {
+		$nested = $this->out_dir . '/tests/wpunit/PodsRepeaterNestedTest.php';
+		$this->assertFileExists( $nested, 'PodsRepeaterNestedTest.php fehlt im Paket' );
+
+		$src   = file_get_contents( $nested );
+		$desc  = file_get_contents( $this->out_dir . '/PR-BESCHREIBUNG.md' );
+		$check = file_get_contents( $this->out_dir . '/CHECKLISTE.md' );
+
+		$this->assertStringContainsString( 'Nested repeaters are not supported', $src );
+		$this->assertStringContainsString( 'class PodsRepeaterNestedTest', $src );
+		$this->assertStringContainsString( '@group podscore', $src, 'Nested-Test braucht die Gruppenmarke (Feldklasse existiert im Kern erst mit dem PR)' );
+		$this->assertStringNotContainsString( 'pods_repeater_', $src, 'Plugin-Praefix steht noch im portierten Test' );
+
+		// Gegenprobe muss mitportiert sein: legitime Felder bleiben gueltig.
+		$this->assertStringContainsString( 'test_validate_passes_without_nested_repeater', $src );
+		$this->assertStringContainsString( 'test_pre_save_keeps_legit_sub_field_values', $src );
+
+		$this->assertStringContainsString( 'PodsRepeaterNestedTest.php', $desc, 'PR-Beschreibung nennt den Nested-Test nicht' );
+		$this->assertStringContainsString( 'PodsRepeaterNestedTest.php', $check, 'Checkliste nennt den Nested-Test nicht' );
+		// Absolute Pfade des Quellrepos haben im Paket nichts zu suchen: der
+		// Test laeuft beim Maintainer in einem anderen Verzeichnisbaum.
+		$this->assertStringNotContainsString( '/home/hermes', $src . $desc . $check, 'Absoluter Pfad aus dem Quellrepos steht im Paket' );
+		$this->assertStringNotContainsString(
+			'validate()` (ab Z. 288) filtert den Sub-Typ **nicht**',
+			$check,
+			'Checkliste behauptet noch, validate() filtere nicht — der Fix aus S21 ist im Paket'
 		);
 	}
 
@@ -194,5 +230,40 @@ class PrPackageTest extends WP_UnitTestCase {
 		@unlink( $tmp );
 
 		$this->assertStringContainsString( 'No syntax errors detected', (string) $out, "php -l meldet Probleme: {$out}" );
+	}
+
+	/**
+	 * readme.txt und Plugin-Header nennen fuer "Requires at least" und
+	 * "Requires PHP" denselben Wert.
+	 *
+	 * Beide Angaben gehen an unterschiedliche Stellen (wp.org liest das
+	 * Readme, WordPress selbst den Header). Laufen sie auseinander, luegt
+	 * eine von beiden — genau das war der Stand vor S22.
+	 */
+	public function test_mindestversionen_stimmen_zwischen_readme_und_header() {
+		$repo  = dirname( __DIR__ );
+		$readme = file_get_contents( $repo . '/readme.txt' );
+		$header = file_get_contents( $repo . '/pods-repeater.php' );
+
+		foreach ( array( 'Requires at least', 'Requires PHP' ) as $feld ) {
+			$pattern = '/^' . preg_quote( $feld, '/' ) . ':[ 	]*([0-9.]+)/m';
+
+			$this->assertSame(
+				1,
+				preg_match( $pattern, $readme, $readme_treffer ),
+				"readme.txt nennt {$feld} nicht genau einmal"
+			);
+			$this->assertSame(
+				1,
+				preg_match( '/\*[ 	]*' . preg_quote( $feld, '/' ) . ':[ 	]*([0-9.]+)/', $header, $header_treffer ),
+				"Plugin-Header nennt {$feld} nicht genau einmal"
+			);
+
+			$this->assertSame(
+				$readme_treffer[1],
+				$header_treffer[1],
+				"{$feld} weicht ab: readme.txt sagt {$readme_treffer[1]}, der Plugin-Header sagt {$header_treffer[1]}"
+			);
+		}
 	}
 }

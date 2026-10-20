@@ -7,8 +7,8 @@
  *     nach tests/wp-tests/  (includes/ + data/, kein svn/kein WP-Core)
  *   - DB: MariaDB des wp-env-Stacks, Datenbank „wp-tests" (root/„password",
  *     Host „mysql") — getrennt von der wp-env-Live-DB „wordpress"
- *   - PHPUnit 10.x, dev-Abhängigkeiten via composer.json:
- *       phpunit/phpunit ^10.5, yoast/phpunit-polyfills ^2.0
+ *   - PHPUnit 9.6.x, dev-Abhängigkeiten via composer.json:
+ *       phpunit/phpunit ^9.6, yoast/phpunit-polyfills ^2.0
  *
  * Ablauf:
  *   1. WP_PHPUNIT__TESTS_CONFIG auf tests/wp-tests-config.php setzen

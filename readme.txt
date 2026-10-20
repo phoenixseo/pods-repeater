@@ -1,7 +1,7 @@
 === Pods Repeater Field ===
 Contributors: phoenixseo
 Tags: pods, repeater, repeatable, field, custom fields
-Requires at least: 7.1
+Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 0.2.1
@@ -123,8 +123,8 @@ Nothing but those two options. The plugin creates no database tables, no custom 
 * Fixed: the field groups admin form posted to `admin.php` instead of `admin-post.php`, so saving a group was silently discarded. Success notices were also invisible in the form, and an empty group slug was dropped from the redirect URL.
 * `uninstall.php` added: uninstalling keeps the field groups by default; the constant `PODS_REPEATER_REMOVE_DATA_ON_UNINSTALL` removes them on request. Post meta is never touched. See the Uninstall section.
 * `languages/pods-repeater.pot` generated with `wp i18n make-pot` (69 strings), so the `Domain Path` header points at a real folder.
-* Requirements corrected to what was actually measured: WordPress 7.1 (tested on 7.1.3) instead of an untested 6.4, `Tested up to: 7.1` instead of 6.8.
-* PHP 7.4 support is now proven, not assumed: all plugin PHP files pass `php -l` on PHP 7.4.33 and the full test suite passes under PHP 7.4.33 as well as PHP 8.3 (108 tests, 2226 assertions on both). No PHP-8-only syntax or WordPress API newer than 6.4 is used.
+* Requirements now carry the evidence, not an estimate: `Requires at least: 6.8` because the whole suite runs against the wp-phpunit test library for WordPress 6.8.2 and the code itself uses no API newer than 6.8. `Tested up to: 7.1` because the demo instance on WordPress 7.1.3 with Pods 3.3.9.1 has the field type registered, field groups, admin UI and frontend exercised end to end. Both `readme.txt` and the plugin header carry the same numbers, and a test now keeps them in sync.
+* `Requires PHP: 7.4` is measured under both ends of the range: the suite passes on PHP 7.4.33 and on PHP 8.3.33 against the same WordPress 6.8.2 core. No PHP-8-only syntax is used.
 
 = 0.2.0 =
 * Field group registry: reusable sub-field sets (`repeater_group`), plus the read API `pods_repeater_get_groups()` and `pods_repeater_get_group_fields()`.
