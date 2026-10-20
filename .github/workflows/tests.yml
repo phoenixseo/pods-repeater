@@ -88,6 +88,9 @@ jobs:
           # und ein Test, der sein Pruefobjekt selbst erzeugt, versteckt die
           # Abhaengigkeit.
           bash scripts/build-pr-package.sh
+          # Release-Zip: PrPackageTest prueft Groesse, Wurzelordner, Manifest
+          # und Version im Zip. Braucht nur PHP mit ZipArchive.
+          bash scripts/build-release-package.sh
           vendor/bin/phpunit --testsuite PodsRepeater
 
   phpcs:

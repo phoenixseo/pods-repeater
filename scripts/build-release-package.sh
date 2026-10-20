@@ -16,18 +16,17 @@
 # still veralten kann.
 #
 # Warum nicht `git archive` / `zip`:
-#   - Das Repo ignoriert /dist/ (.gitignore), und `dist/` enthaelt untracked
-#     Altbestand (e2e-Logs, PNGs, das Pods-PR-Paket). git archive nimmt nur
-#     getrackte Dateien — es wuerde also genau das Verzeichnis auslassen, in
-#     das das Ergebnis soll, und bei den Quellen nur zufaellig richtig raten.
-#     `zip -r .` muesste jeden Pfad einzeln ausschliessen.
-#   - zip/unzip sind auf dem Host nicht installiert; im CLI-Container sind
-#     PHP 8.3 mit ZipArchive und unzip vorhanden. Der Container ist die
-#     Umgebung, in der das Plugin ohnehin laeuft.
-# Darum: Allowlist pro Verzeichnis, Allowlist pro Datei, Bau im Container.
-# Die Allowlist ist kuerzer und lesbarer als die Ausschlussliste, und sie
-# erlaubt den Fehler in die sichere Richtung: eine neue Datei fehlt im Paket,
-# statt dass sie versehentlich mitgeht.
+#   - `zip -r .` muesste jeden Pfad einzeln ausschliessen; die Allowlist ist
+#     kuerzer und erlaubt den Fehler nur in die sichere Richtung (eine neue
+#     Datei fehlt im Paket, statt dass sie versehentlich mitgeht).
+#   - zip/unzip sind auf dem Host nicht installiert.
+# Darum: Allowlist pro Verzeichnis und pro Datei; gebaut wird mit ZipArchive
+# in scripts/release-package.php.
+#
+# Der Bau braucht nur PHP mit ZipArchive, keinen laufenden Webserver: `php`
+# lokal, wenn vorhanden, sonst `docker exec` in den wp-env-CLI-Container
+# (dort ist PHP da, wo das Plugin ohnehin laeuft). Damit laeuft dasselbe
+# Skript auf dem Host und in CI.
 #
 # Eigenschaften:
 #   - baut nicht, wenn Version/Header/Stable tag/readme im Zip fehlen
@@ -42,6 +41,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUT_DIR="${REPO_ROOT}/dist/release"
 CONTAINER="${PODS_REPEATER_CONTAINER:-wp-env-pods-repeater-54d58dae-cli-1}"
+HELPER="scripts/release-package.php"
 
 # Ordner mit Angabe, ob rekursiv (1) oder nur die erste Ebene (0).
 # ui/ und classes/ und includes/ sind rekursiv: dort liegt die eigentliche
@@ -70,6 +70,7 @@ NOTE() { printf '  %s\n' "$*"; }
 # ---------------------------------------------------------------------------
 [[ -f "${REPO_ROOT}/pods-repeater.php" ]] || DIE "pods-repeater.php fehlt in ${REPO_ROOT}"
 [[ -f "${REPO_ROOT}/readme.txt" ]] || DIE "readme.txt fehlt in ${REPO_ROOT}"
+[[ -f "${REPO_ROOT}/${HELPER}" ]] || DIE "${HELPER} fehlt"
 for eintrag in "${FILES[@]}"; do
   [[ -f "${REPO_ROOT}/${eintrag}" ]] || DIE "Datei fehlt: ${eintrag}"
 done
@@ -78,24 +79,41 @@ for eintrag in "${DIRS[@]}"; do
   [[ -d "${REPO_ROOT}/${dir}" ]] || DIE "Verzeichnis fehlt: ${dir}"
 done
 
-docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null | grep -q true || \
-  DIE "Container ${CONTAINER} laeuft nicht (docker ps | grep pods-repeater)"
+# PHP-Runner: lokal, wenn php mit ZipArchive da ist; sonst der Container.
+# Alle Pfade bleiben relativ zur Repo-Wurzel, damit beide Wege identisch sind
+# und keine Pfaduebersetzung noetig wird.
+PHP_MODE=""
+if command -v php >/dev/null 2>&1 && php -r 'exit(class_exists("ZipArchive") ? 0 : 1);' >/dev/null 2>&1; then
+  PHP_MODE="lokal"
+elif command -v docker >/dev/null 2>&1 \
+  && docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null | grep -q true; then
+  PHP_MODE="container:${CONTAINER}"
+else
+  DIE "kein PHP mit ZipArchive und kein laufender Container ${CONTAINER} — php-zip installieren oder wp-env starten"
+fi
 
-# Das Repo ist als wp-content/plugins/pods-repeater in den Container gemountet,
-# NICHT unter dem Host-Pfad. Die Angabe "Host- und Container-Pfade sind
-# identisch" aus der Sprint-Karte ist falsch; der Pfad wird hier aus dem Mount
-# gelesen, statt ihn zu raten.
-CONTAINER_ROOT="${PODS_REPEATER_CONTAINER_ROOT:-}"
-if [[ -z "${CONTAINER_ROOT}" ]]; then
+# Im Container ist das Repo als wp-content/plugins/pods-repeater gemountet,
+# NICHT unter dem Host-Pfad. Arbeitsverzeichnis deshalb aus dem Mount lesen,
+# statt einen Pfad zu raten.
+CONTAINER_ROOT=""
+if [[ "${PHP_MODE}" == container:* ]]; then
   CONTAINER_ROOT="$(docker inspect -f \
     '{{range .Mounts}}{{if eq .Destination "/var/www/html/wp-content/plugins/pods-repeater"}}{{.Destination}}{{end}}{{end}}' \
     "${CONTAINER}")"
+  [[ -n "${CONTAINER_ROOT}" ]] || \
+    DIE "Container ${CONTAINER} hat kein Mount auf wp-content/plugins/pods-repeater"
+  docker exec "${CONTAINER}" test -f "${CONTAINER_ROOT}/pods-repeater.php" || \
+    DIE "${CONTAINER_ROOT} ist im Container ${CONTAINER} nicht lesbar"
 fi
-[[ -n "${CONTAINER_ROOT}" ]] || \
-  DIE "Container ${CONTAINER} hat kein Mount auf wp-content/plugins/pods-repeater"
 
-docker exec "${CONTAINER}" test -f "${CONTAINER_ROOT}/pods-repeater.php" || \
-  DIE "${CONTAINER_ROOT} ist im Container ${CONTAINER} nicht lesbar"
+# Ein Aufruf, zwei Umgebungen.
+pr_php() {
+  if [[ "${PHP_MODE}" == "lokal" ]]; then
+    ( cd "${REPO_ROOT}" && php "${HELPER}" "$@" )
+  else
+    docker exec -w "${CONTAINER_ROOT}" "${CONTAINER}" php "${HELPER}" "$@"
+  fi
+}
 
 # ---------------------------------------------------------------------------
 # 1. Versionen vor dem Bauen vergleichen
@@ -128,27 +146,16 @@ REL_MANIFEST="dist/release/pods-repeater-${VERSION}.manifest.txt"
 ZIP_PATH="${REPO_ROOT}/${REL_ZIP}"
 MANIFEST="${REPO_ROOT}/${REL_MANIFEST}"
 
-# Derselbe Pfad aus Sicht des Containers. Der Repo-Ordner ist als
-# wp-content/plugins/pods-repeater gemountet; der Host-Pfad existiert dort
-# nicht (die Sprint-Karte behauptet das Gegenteil). Einmal berechnet, danach
-# nur noch benutzt — kein "../" in den Aufrufen.
-CONTAINER_ZIP="${CONTAINER_ROOT}/${REL_ZIP}"
-
 printf 'Baue pods-repeater %s\n' "${VERSION}"
-printf '  Host:      %s\n' "${REPO_ROOT}"
-printf '  Container: %s\n' "${CONTAINER_ROOT}"
+printf '  Host:  %s\n' "${REPO_ROOT}"
+printf '  PHP:   %s\n' "${PHP_MODE}"
 
 # ---------------------------------------------------------------------------
-# 2. Zip im Container bauen
+# 2. Zip bauen
 #
-# Gebaut wird aus dem Mount, also exakt aus dem Arbeitsstand — aber nur aus
-# den Pfaden der Allowlist. ZipArchive mit Overwrite, kein addGlob: addGlob
-# hat seine eigene Ausschluss-Semantik, und die will ich hier nicht.
-#
-# setMtimeName setzt den Zeitstempel jeder Datei auf deren echte mtime. Ohne
-# das traegt jeder Eintrag die Build-Zeit, und zwei Laeufe mit identischem
-# Inhalt erzeugen verschiedene Zips. So ist das Paket reproduzierbar, solange
-# die Dateien unveraendert sind.
+# Aus dem Arbeitsstand, aber nur aus den Pfaden der Allowlist. Die mtimes der
+# Dateien landen im Zip (PHP 8.3+), damit zwei Laeufe mit identischem Inhalt
+# dasselbe Paket ergeben.
 # ---------------------------------------------------------------------------
 mkdir -p "${OUT_DIR}"
 rm -f "${ZIP_PATH}" "${MANIFEST}"
@@ -156,91 +163,27 @@ rm -f "${ZIP_PATH}" "${MANIFEST}"
 DIRS_SPEC="$(printf '%s;' "${DIRS[@]}")"
 FILES_SPEC="$(printf '%s;' "${FILES[@]}")"
 
-docker exec \
-  -e "PR_ROOT=${CONTAINER_ROOT}" \
-  -e "PR_ZIP=${CONTAINER_ZIP}" \
-  -e "PR_DIRS=${DIRS_SPEC}" \
-  -e "PR_FILES=${FILES_SPEC}" \
-  "${CONTAINER}" php -r '
-$root  = rtrim( getenv( "PR_ROOT" ), "/" );
-$zip_p = getenv( "PR_ZIP" );
-$dirs  = array_filter( explode( ";", getenv( "PR_DIRS" ) ) );
-$files = array_filter( explode( ";", getenv( "PR_FILES" ) ) );
-
-$zip = new ZipArchive();
-if ( true !== $zip->open( $zip_p, ZipArchive::CREATE | ZipArchive::OVERWRITE ) ) {
-    fwrite( STDERR, "ZipArchive konnte {$zip_p} nicht anlegen\n" );
-    exit( 1 );
-}
-
-$added = 0;
-$add = function ( string $abs, string $rel ) use ( $zip, &$added ) {
-    if ( ! is_file( $abs ) ) {
-        fwrite( STDERR, "fehlt: {$abs}\n" );
-        exit( 1 );
-    }
-    $zip->addFile( $abs, "pods-repeater/" . $rel );
-    $zip->setMtimeName( "pods-repeater/" . $rel, filemtime( $abs ) );
-    $added++;
-};
-
-foreach ( $files as $file ) {
-    $add( $root . "/" . $file, $file );
-}
-
-foreach ( $dirs as $spec ) {
-    list( $dir, $recursive ) = array_pad( explode( ":", $spec ), 2, "0" );
-    $base = $root . "/" . $dir;
-    if ( "1" === $recursive ) {
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator( $base, FilesystemIterator::SKIP_DOTS )
-        );
-        foreach ( $iterator as $info ) {
-            if ( ! $info->isFile() ) {
-                continue;
-            }
-            $rel = $dir . "/" . substr( $info->getPathname(), strlen( $base ) + 1 );
-            $add( $info->getPathname(), $rel );
-        }
-    } else {
-        foreach ( scandir( $base ) as $entry ) {
-            if ( "." === $entry || ".." === $entry ) {
-                continue;
-            }
-            if ( ! is_file( $base . "/" . $entry ) ) {
-                continue;
-            }
-            $add( $base . "/" . $entry, $dir . "/" . $entry );
-        }
-    }
-}
-
-if ( 0 === $added ) {
-    fwrite( STDERR, "keine Datei hinzugefuegt\n" );
-    exit( 1 );
-}
-$zip->close();
-echo "Dateien im Zip: {$added}\n";
-' || DIE "Zip-Bau im Container fehlgeschlagen"
+pr_php build \
+  --zip "${REL_ZIP}" \
+  --manifest "${REL_MANIFEST}" \
+  --dirs "${DIRS_SPEC}" \
+  --files "${FILES_SPEC}" \
+  || DIE "Zip-Bau fehlgeschlagen"
 
 [[ -f "${ZIP_PATH}" ]] || DIE "Zip wurde nicht geschrieben: ${ZIP_PATH}"
+[[ -s "${MANIFEST}" ]] || DIE "Manifest ist leer"
 
 # ---------------------------------------------------------------------------
-# 3. Manifest aus dem gebauten Zip erzeugen
+# 3. Installationsanleitung dazulegen
 #
-# Das Manifest ist keine Abschrift einer Absicht, sondern die Liste aus dem
-# Zip selbst. Der Test prueft spaeter gegen genau diese Datei — driftet das
-# Skript, faellt es dort auf, nicht erst beim Tester.
-#
-# Gelesen wird `unzip -l` in der BusyBox-Variante des Containers (kein -Z,
-# kein Info-ZIP). Zeilenformat: "<Laenge>  <Datum>  <Zeit>   <Name>".
-# Die Kopf- und Summenzeilen fallen durch die Namenspruefung, das Datum durch
-# das Muster — kein Sed-Gefrickel an Spaltenpositionen.
+# Die Anleitung ist Inhalt, nicht Build-Output: sie liegt als INSTALL.md im
+# Repo und wird hier nur kopiert. Damit ist sie im Git reviewbar (und in CI
+# vorhanden), steht aber im Release-Ordner neben dem Zip, wo ein Tester sie
+# sucht. Der Test prueft die Kopie und ihren Bezug auf den Dateinamen — beim
+# Versionsbump faellt eine vergessene Anleitung dort auf, nicht beim Tester.
 # ---------------------------------------------------------------------------
-docker exec "${CONTAINER}" unzip -l "${CONTAINER_ZIP}" \
-  | awk '$4 ~ /^pods-repeater\// { print $4 }' > "${MANIFEST}"
-
-[[ -s "${MANIFEST}" ]] || DIE "Manifest ist leer — unzip -l lieferte keine Dateinamen"
+cp "${REPO_ROOT}/INSTALL.md" "${OUT_DIR}/INSTALL.md"
+[[ -s "${OUT_DIR}/INSTALL.md" ]] || DIE "INSTALL.md nicht kopiert"
 
 # ---------------------------------------------------------------------------
 # 4. Selbstpruefung gegen die Zusagen der Karte
@@ -269,7 +212,6 @@ for verboten in "vendor/" "tests/" "dist/" "/.git/" "node_modules/" "scripts/" \
                 "composer.json" "composer.lock" ".wp-env" "phpunit.xml" "assets/"; do
   if grep -qF -- "${verboten}" "${MANIFEST}"; then
     DIE "verbotener Pfad im Zip: ${verboten}"
-    printf '%s\n' "$(grep -F -- "${verboten}" "${MANIFEST}")" >&2
   fi
 done
 
@@ -281,20 +223,20 @@ FREMD="$(grep -vc '^pods-repeater/' "${MANIFEST}" || true)"
 # Der Header im Zip muss die Version tragen, die der Dateiname behauptet.
 # Gelesen aus dem Zip, nicht aus der Arbeitskopie: das ist der Punkt, an dem
 # ein vergessener Bump auffliegt.
-ZIP_VERSION="$(docker exec "${CONTAINER}" unzip -p "${CONTAINER_ZIP}" pods-repeater/pods-repeater.php \
+ZIP_VERSION="$(pr_php get --zip "${REL_ZIP}" --entry pods-repeater/pods-repeater.php \
   | sed -n 's/^[[:space:]]*\*[[:space:]]*Version:[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -n1)"
 [[ "${ZIP_VERSION}" == "${VERSION}" ]] || \
   DIE "Header im Zip sagt ${ZIP_VERSION}, Dateiname sagt ${VERSION}"
 
-ZIP_PHP="$(docker exec "${CONTAINER}" unzip -p "${CONTAINER_ZIP}" pods-repeater/pods-repeater.php \
+ZIP_PHP="$(pr_php get --zip "${REL_ZIP}" --entry pods-repeater/pods-repeater.php \
   | sed -n 's/^ \* Requires PHP:[[:space:]]*\(.*\)$/\1/p' | head -n1)"
-ZIP_WP="$(docker exec "${CONTAINER}" unzip -p "${CONTAINER_ZIP}" pods-repeater/pods-repeater.php \
+ZIP_WP="$(pr_php get --zip "${REL_ZIP}" --entry pods-repeater/pods-repeater.php \
   | sed -n 's/^ \* Requires at least:[[:space:]]*\(.*\)$/\1/p' | head -n1)"
 [[ -n "${ZIP_PHP}" && -n "${ZIP_WP}" ]] || DIE "Voraussetzungen fehlen im Zip-Header"
 
 # Stable tag im Zip-readme muss denselben Wert tragen — die dritte Stelle,
 # die ein Bump treffen muss, und die einzige, die WordPress selbst liest.
-ZIP_STABLE="$(docker exec "${CONTAINER}" unzip -p "${CONTAINER_ZIP}" pods-repeater/readme.txt \
+ZIP_STABLE="$(pr_php get --zip "${REL_ZIP}" --entry pods-repeater/readme.txt \
   | sed -n 's/^Stable tag:[[:space:]]*\([^[:space:]]*\).*/\1/p' | head -n1)"
 [[ "${ZIP_STABLE}" == "${VERSION}" ]] || \
   DIE "Stable tag im Zip sagt ${ZIP_STABLE}, erwartet ${VERSION}"
