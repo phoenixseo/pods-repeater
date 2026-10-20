@@ -4,7 +4,7 @@ Tags: pods, repeater, repeatable, field, custom fields
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.2.1
+Stable tag: 0.3.0-alpha
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,13 +27,13 @@ Adds a **`repeater`** field type to [Pods](https://pods.io): a group of scalar s
 * **i18n-ready** — all strings translatable, text domain `pods-repeater`.
 * **Required sub-field validation** — per-row, empty rows never block saving.
 
-This plugin is under active development (v0.2.1). See the [GitHub repository](https://github.com/phoenixseo/pods-repeater) for the roadmap and source.
+This plugin is under active development (v0.3.0-alpha).
 
 = Requirements =
 
-* WordPress 7.1+ (tested on 7.1.3; earlier versions untested)
+* WordPress 6.8+ (tested against 6.8.2 in the test suite and 7.1.3 in the demo instance)
 * PHP 7.4+ (test suite passes on 7.4.33 and 8.3.33)
-* Pods 3.x (tested with 3.3.9.1)
+* Pods 3.x (tested with 3.3.9.1), active
 
 == Installation ==
 
@@ -157,6 +157,14 @@ There is deliberately no checkbox in the admin screen for this. An admin toggle 
 Nothing but those two options. The plugin creates no database tables, no custom post types, no user meta and no cron events, so there is nothing else to clean up. If you skipped the constant and want a clean slate, delete the two options manually (for example with `wp option delete pods_repeater_groups pods_repeater_groups_version`).
 
 == Changelog ==
+
+= 0.3.0-alpha =
+This is an alpha build: install it on a test site, not on a site you depend on. There is no upgrade path guarantee between alpha builds, and the data format may still move.
+
+* Repeaters no longer nest. A sub-field of type `repeater` is now refused on save, not only hidden in the editor: the save returns an error naming the sub-field, and writes through the API, an import or a REST call drop the nested value instead of storing a structure the frontend cannot read. A field configuration without a nested repeater is unaffected.
+* Compatibility statements now match what was measured. WordPress 6.8 is the stated minimum (the test suite runs against 6.8.2 and the code uses no newer API), PHP 7.4 is the minimum (the suite passes on 7.4.33 and 8.3.33), and the requirements section no longer advertises a newer WordPress than the plugin needs. The plugin header and this readme carry the same numbers, and a test keeps them in sync.
+* The list of supported sub-field types was corrected. It advertised `file`, `avatar`, `oembed`, `phone`, `currency` and `slug`, none of which this plugin accepts; it now names the types that actually work, with the Pods naming (`website`, `paragraph`) rather than the ACF naming.
+* Known limitations are documented. A new section names the five edges a new user hits first — no `file` / `avatar` / `oembed` sub-fields, no nested repeaters, field groups only through the admin, no migration of existing ACF repeater data, no block-editor or REST editor UI — and gives the working alternative for each. The FAQ answers the file-field question that comes up first in support.
 
 = 0.2.1 =
 * Fixed: the field groups admin form posted to `admin.php` instead of `admin-post.php`, so saving a group was silently discarded. Success notices were also invisible in the form, and an empty group slug was dropped from the redirect URL.

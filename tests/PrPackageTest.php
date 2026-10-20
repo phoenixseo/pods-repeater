@@ -385,4 +385,310 @@ class PrPackageTest extends WP_UnitTestCase {
 		$methode = new ReflectionMethod( 'PodsField_Repeater', 'get_nested_repeater_error' );
 		$this->assertTrue( $methode->isProtected(), 'get_nested_repeater_error() fehlt — Punkt 2 (kein Nesting) waere unbelegt' );
 	}
+
+	/* ---------------------------------------------------------------------
+	 * Installierbares Alpha-Paket (dist/release/)
+	 *
+	 * Das Zip ist das Artefakt, das einen Fremden erreicht, waehrend das
+	 * Repo niemand sieht. Ein Fehler darin — flaches Entpacken, ein
+	 * vergessener Version-Bump, ein vendor/ mit 10 MB — faellt sonst erst
+	 * beim Tester auf.
+	 *
+	 * Geprueft wird gegen das Manifest, das scripts/build-release-package.sh
+	 * aus dem gebauten Zip erzeugt. Kein handgepflegtes Manifest: waere es
+	 * handgepflegt, wuerde der Test die Absicht pruefen, nicht das Produkt.
+	 * Fehlt das Manifest, ist der Test rot (nicht skippen) — ein gruener
+	 * Lauf ohne Pruefobjekt waere wertlos.
+	 * ------------------------------------------------------------------ */
+
+	/**
+	 * Pfad zum gebauten Zip (Versionsnummer aus dem Dateinamen gesucht).
+	 *
+	 * @return string Leerer String, wenn kein Zip da ist.
+	 */
+	private function release_zip() {
+		$treffer = glob( dirname( __DIR__ ) . '/dist/release/pods-repeater-*.zip' );
+
+		return empty( $treffer ) ? '' : $treffer[0];
+	}
+
+	/**
+	 * Zeilen des vom Build erzeugten Manifests.
+	 *
+	 * @return array<int, string> Dateipfade im Zip, mit Praefix pods-repeater/.
+	 */
+	private function release_manifest() {
+		$zip = $this->release_zip();
+
+		$this->assertNotSame(
+			'',
+			$zip,
+			'Release-Zip fehlt. Vor dem Testlauf auf dem Host bauen: bash scripts/build-release-package.sh'
+		);
+
+		$manifest = preg_replace( '/\.zip$/', '.manifest.txt', $zip );
+
+		$this->assertFileExists(
+			$manifest,
+			'Manifest fehlt. Es wird vom Build erzeugt (scripts/build-release-package.sh) — nicht von Hand anlegen'
+		);
+
+		$zeilen = file( $manifest, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+
+		$this->assertNotEmpty( $zeilen, 'Manifest ist leer' );
+
+		return $zeilen;
+	}
+
+	/**
+	 * Das Paket existiert, hat eine plausible Groesse und traegt den
+	 * Plugin-Ordner als Wurzel.
+	 *
+	 * Der Ordnername im Zip entscheidet, ob WordPress das Plugin erkennt:
+	 * liegt pods-repeater.php auf oberster Ebene, entpackt das Zip flach
+	 * neben die anderen Plugins, und WordPress findet keinen Header.
+	 */
+	public function test_release_zip_existiert_und_hat_plugin_ordner_als_wurzel() {
+		$zip  = $this->release_zip();
+		$size = filesize( $zip );
+
+		$this->assertGreaterThan( 20 * 1024, $size, "Release-Zip ist nur {$size} Bytes — das ist kein vollstaendiges Paket" );
+
+		$manifest = $this->release_manifest();
+
+		$this->assertSame(
+			'pods-repeater/pods-repeater.php',
+			$manifest[0],
+			'Erster Eintrag im Zip ist nicht der Plugin-Einstieg — das Zip entpackt sich flach'
+		);
+
+		foreach ( $manifest as $pfad ) {
+			$this->assertStringStartsWith(
+				'pods-repeater/',
+				$pfad,
+				"Eintrag \"{$pfad}\" liegt ausserhalb von pods-repeater/ und faellt beim Entpacken neben das Plugin"
+			);
+		}
+	}
+
+	/**
+	 * Alles, was WordPress zum Laufen braucht, ist im Zip.
+	 *
+	 * readme.txt und uninstall.php sind Pflicht, nicht Kuer: das readme ist
+	 * die einzige Dokumentation, die ein Tester im Plugin-Screen sieht, und
+	 * uninstall.php ist der Opt-in-Cleanup, den die Uninstall-Sektion
+	 * verspricht. Fehlt eine davon, ist das readme eine Luege.
+	 */
+	public function test_release_zip_enthaelt_die_laufzeitdateien() {
+		$manifest = $this->release_manifest();
+
+		$pflicht = array(
+			'pods-repeater/pods-repeater.php',
+			'pods-repeater/uninstall.php',
+			'pods-repeater/readme.txt',
+			'pods-repeater/classes/fields/repeater.php',
+			'pods-repeater/classes/admin/field-groups-page.php',
+			'pods-repeater/includes/field-groups.php',
+			'pods-repeater/includes/template-functions.php',
+			'pods-repeater/includes/template-functions-aliases.php',
+			'pods-repeater/ui/js/repeater.js',
+			'pods-repeater/ui/js/field-groups.js',
+			'pods-repeater/languages/pods-repeater.pot',
+		);
+
+		foreach ( $pflicht as $pfad ) {
+			$this->assertContains( $pfad, $manifest, "Release-Zip enthaelt \"{$pfad}\" nicht" );
+		}
+	}
+
+	/**
+	 * Der Entwicklungsstand bleibt draussen.
+	 *
+	 * vendor/ waere toter Ballast (der Autoloader ist im Plugin nicht in
+	 * Benutzung), und tests/, scripts/, dist/ und .git/ sind Arbeitsstand —
+	 * ein Paket, das Fremde sehen, darf den nicht mitliefern.
+	 */
+	public function test_release_zip_enthaelt_keinen_entwicklungsstand() {
+		$manifest = $this->release_manifest();
+
+		$verboten = array( 'vendor/', 'tests/', 'dist/', '/.git/', 'node_modules/', 'scripts/', 'assets/' );
+
+		foreach ( $verboten as $muster ) {
+			foreach ( $manifest as $pfad ) {
+				$this->assertStringNotContainsString(
+					$muster,
+					$pfad,
+					"Release-Zip enthaelt \"{$pfad}\" (verboten: {$muster})"
+				);
+			}
+		}
+
+		foreach ( array( 'composer.json', 'composer.lock', 'phpunit.xml.dist' ) as $datei ) {
+			$this->assertNotContains(
+				'pods-repeater/' . $datei,
+				$manifest,
+				"Release-Zip enthaelt die Entwicklungsdatei {$datei}"
+			);
+		}
+	}
+
+	/**
+	 * Dateiname, Header im Zip, Stable tag im Zip und Wurzel-readme tragen
+	 * dieselbe Version.
+	 *
+	 * Der Bump muss vier Stellen treffen (Header, Konstante, Stable tag,
+	 * Changelog). Eine vergessene Stelle ist der klassische Fehler: WordPress
+	 * zeigt dann eine andere Version an, als im Dateinamen steht, und das
+	 * Update-Erkennung des Testergebnisse laeuft ins Leere. Gelesen wird aus
+	 * dem Zip, nicht aus der Arbeitskopie — sonst pruefte der Test nur den
+	 * Arbeitsstand und nicht das Artefakt.
+	 */
+	public function test_release_version_stimmt_mit_header_und_readme_ueberein() {
+		$zip = $this->release_zip();
+
+		$this->assertSame(
+			1,
+			preg_match( '/pods-repeater-(.+)\.zip$/', $zip, $datei_treffer ),
+			'Versionsnummer im Zip-Dateinamen nicht lesbar'
+		);
+		$version = $datei_treffer[1];
+
+		$php = $this->zip_eintrag( $zip, 'pods-repeater/pods-repeater.php' );
+		$rdm = $this->zip_eintrag( $zip, 'pods-repeater/readme.txt' );
+
+		$this->assertNotSame( '', $php, 'pods-repeater.php ist im Zip nicht lesbar' );
+		$this->assertNotSame( '', $rdm, 'readme.txt ist im Zip nicht lesbar' );
+
+		$this->assertSame(
+			1,
+			preg_match( '/^[ 	]*\*[ 	]*Version:[ 	]*(\S+)/m', $php, $header_treffer ),
+			'Plugin-Header im Zip nennt keine Version'
+		);
+		$this->assertSame( $version, $header_treffer[1], "Header im Zip ({$header_treffer[1]}) weicht vom Dateinamen ({$version}) ab" );
+
+		$this->assertSame(
+			1,
+			preg_match( "/^define\( 'PODS_REPEATER_VERSION', '([^']+)' \);$/m", $php, $konst_treffer ),
+			'PODS_REPEATER_VERSION im Zip nicht gefunden'
+		);
+		$this->assertSame( $version, $konst_treffer[1], "PODS_REPEATER_VERSION im Zip ({$konst_treffer[1]}) weicht vom Dateinamen ab" );
+
+		$this->assertSame(
+			1,
+			preg_match( '/^Stable tag:[ 	]*(\S+)/m', $rdm, $stable_treffer ),
+			'readme.txt im Zip nennt keinen Stable tag'
+		);
+		$this->assertSame( $version, $stable_treffer[1], "Stable tag im Zip ({$stable_treffer[1]}) weicht vom Dateinamen ab" );
+
+		// Und die Arbeitskopie, aus der das Zip gebaut wurde, muss denselben
+		// Wert tragen — sonst baut der naechste Lauf ein anderes Paket.
+		$repo = dirname( __DIR__ );
+		$this->assertStringContainsString(
+			"Stable tag: {$version}",
+			(string) file_get_contents( $repo . '/readme.txt' ),
+			"readme.txt im Repo traegt nicht den Stable tag {$version}"
+		);
+		$this->assertStringContainsString(
+			"* Version:     {$version}",
+			(string) file_get_contents( $repo . '/pods-repeater.php' ),
+			"Plugin-Header im Repo traegt nicht die Version {$version}"
+		);
+		$this->assertStringContainsString(
+			"= {$version} =",
+			(string) file_get_contents( $repo . '/readme.txt' ),
+			"readme.txt hat keinen Changelog-Eintrag '= {$version} ='"
+		);
+	}
+
+	/**
+	 * Die Versionsangabe steht nirgends mehr auf dem alten Wert.
+	 *
+	 * Gegenstueck zum Akzeptanzkriterium der Karte: 0.2.1 darf in keiner
+	 * Datei mehr stehen, die WordPress liest. Einzige Ausnahme ist die
+	 * Versionshistorie — dort gehoert der alte Wert hin, sonst waere der
+	 * Changelog falsch.
+	 */
+	public function test_keine_alte_versionsnummer_im_laufzeitcode() {
+		$repo = dirname( __DIR__ );
+
+		foreach ( array( 'pods-repeater.php', 'readme.txt', 'uninstall.php' ) as $datei ) {
+			$inhalt = (string) file_get_contents( $repo . '/' . $datei );
+
+			// Header-Block: nur der Header, nicht der Changelog.
+			if ( 'readme.txt' === $datei ) {
+				list( $kopf ) = explode( '== Changelog ==', $inhalt, 2 );
+			} else {
+				$kopf = $inhalt;
+			}
+
+			$this->assertStringNotContainsString(
+				'0.2.1',
+				$kopf,
+				"{$datei} nennt ausserhalb des Changelogs noch 0.2.1"
+			);
+		}
+
+		$treffer = array();
+		exec(
+			'grep -rn ' . escapeshellarg( '0.2.1' ) . ' '
+			. escapeshellarg( $repo . '/includes' ) . ' '
+			. escapeshellarg( $repo . '/classes' ) . ' 2>&1',
+			$treffer
+		);
+		$this->assertSame( array(), $treffer, 'Klassen/Includes nennen noch 0.2.1: ' . implode( ' | ', $treffer ) );
+	}
+
+	/**
+	 * Die Installationsanleitung liegt neben dem Zip und nennt die Schritte,
+	 * die ein Tester braucht.
+	 *
+	 * Ein Zip ohne Anleitung beantwortet die Frage "kann ich das jemandem
+	 * geben" nur halb: ohne die Voraussetzungen (Pods aktiv) scheitert der
+	 * erste Versuch, und ohne die Known Limitations liest der Tester die
+	 * bewussten Grenzen als Bugs.
+	 */
+	public function test_installationsanleitung_liegt_bei() {
+		$anleitung = dirname( __DIR__ ) . '/dist/release/INSTALL.md';
+
+		$this->assertFileExists( $anleitung, 'dist/release/INSTALL.md fehlt' );
+
+		$text = (string) file_get_contents( $anleitung );
+
+		$stichworte = array(
+			'Plugins'             => 'Weg ueber den Plugin-Screen',
+			'Hochladen'           => 'Upload-Schritt',
+			'Pods'                => 'Voraussetzung Pods',
+			'Known Limitations'   => 'Verweis auf die bekannten Grenzen',
+			'pods_field'          => 'Leseschritt im Template',
+			'Repeater'            => 'Feldtyp',
+		);
+
+		foreach ( $stichworte as $wort => $zweck ) {
+			$this->assertStringContainsString( $wort, $text, "INSTALL.md nennt \"{$wort}\" nicht ({$zweck})" );
+		}
+
+		$zip = $this->release_zip();
+		$name = basename( $zip );
+		$this->assertStringContainsString( $name, $text, "INSTALL.md verweist nicht auf das gebaute Paket {$name}" );
+	}
+
+	/**
+	 * Inhalt eines Eintrags aus dem Zip lesen.
+	 *
+	 * `unzip -p` im Testcontainer (BusyBox-Variante, kein PHP-ZipArchive im
+	 * Testlauf garantiert). Schlaegt der Aufruf fehl, kommt ein leerer String
+	 * zurueck und die Assertion nennt den Pfad.
+	 *
+	 * @param string $zip    Pfad zum Zip.
+	 * @param string $eintrag Eintragsname im Zip.
+	 *
+	 * @return string Inhalt oder leerer String.
+	 */
+	private function zip_eintrag( $zip, $eintrag ) {
+		$out = shell_exec(
+			'unzip -p ' . escapeshellarg( $zip ) . ' ' . escapeshellarg( $eintrag ) . ' 2>/dev/null'
+		);
+
+		return (string) $out;
+	}
 }
