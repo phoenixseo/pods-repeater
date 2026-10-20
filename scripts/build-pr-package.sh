@@ -338,8 +338,9 @@ Was der PR mitbringt:
 - 33 Testmethoden in drei Dateien gegen Pods 3.3.9.1: Limit-Invariante,
   Feldvertrag, Kern-Integration (Registrierung, Konventionspfad,
   Save-Vertrag). Keine Fixtures, kein Netzwerk.
-- Admin-UI im echten Browser geprueft: Zeile anlegen, Limit greift,
-  verschieben, loeschen, speichern, Werte nach dem Neuladen korrekt.
+- Admin-UI im echten Browser geprueft: 18 Schritte, 18 PASS (Lauf 4) —
+  Zeile anlegen, Limit greift, verschieben, loeschen, speichern, Werte nach
+  dem Neuladen korrekt; der Feldgruppen-Pfad laeuft mit, ohne Inline-JSON.
 
 Wichtig fuer die Einordnung: der Typ gehoert **nicht** in
 `pods_repeatable_field_types`. Steht er dort, rendert der generische
@@ -378,10 +379,13 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
       Verweis auf die Antwort. Ein PR ohne Vorlauf in einem alten Thread
       wird eher geschlossen als gelesen.
 - [ ] **Screenshots beilegen?** Die Admin-UI ist visuell; ein Bild des
-      Repeaters mit zwei Zeilen im Editor hilft mehr als drei Absaetze. Die
-      Datei liegt nicht im Paket (`dist/e2e/nach-neuladen.png` entsteht bei
-      jedem E2E-Lauf neu, `dist/` ist gitignored). Bei Bedarf vor dem PR
-      erzeugen: `node scripts/e2e-admin-ui.mjs`.
+      Repeaters mit zwei Zeilen im Editor hilft mehr als drei Absaetze. Es
+      liegen zwei passende Dateien aus dem E2E-Lauf vor, beide gitignored und
+      nicht im Paket:
+      `dist/e2e/gruppe-nach-neuladen.png` (Feldgruppen-Pfad, aus
+      `node scripts/e2e-group-path.mjs`) und `dist/e2e/nach-neuladen.png`
+      (Inline-JSON-Pfad, aus `node scripts/e2e-admin-ui.mjs`). Bei Bedarf vor
+      dem PR neu erzeugen — der Lauf schreibt sie ohnehin neu.
 - [ ] **Lizenzheader.** Feldklasse und Skript tragen den GPL-2.0-or-later-
       Header des Plugins. Vor dem PR gegen die Kopfzeilen bestehender
       Kern-Felddateien abgleichen (Jahr, Copyright-Inhaber).
@@ -414,7 +418,13 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
 
 ## 3. Was im Paket bewusst fehlt
 
-- Verschachtelte Repeater — gesperrt, mit Hinweis im Editor.
+- Verschachtelte Repeater — gesperrt, aber nur im Editor: der Guard bei
+  `classes/fields/repeater.php:580-581` gibt den Hinweis aus,
+  `validate()` (ab Z. 288) filtert den Sub-Typ **nicht**. Ein per JSON oder
+  Feldgruppe eingeschleuster `repeater`-Sub-Typ wird also nicht serverseitig
+  abgelehnt. Wer das als Luecke sieht, hat recht — die Absicherung in
+  `validate()` fehlt und ist bewusst nicht nachgezogen (Code-Aenderung waere
+  nicht Teil dieses Sprints).
 - React-DFV-Editor fuer die Sub-Feld-Konfiguration — Konfiguration ist
   zunaechst JSON bzw. eine Feldgruppe.
 - Die Feldgruppen-Registry — Plugin-Konzept, im Kern nicht enthalten. Der
@@ -423,8 +433,13 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
   Fatal).
 - `uninstall.php` und `languages/` — Plugin-Haushalt (Opt-in-Cleanup zweier
   Optionen, POT-Datei). Im Kern deinstalliert man kein Feld, und die
-  Strings laufen dort ueber die Kern-Textdomain `pods` (in der portierten
-  Feldklasse 35 Ersetzungen, 0 verbleibende `pods-repeater`-Fundstellen).
+  Strings laufen dort ueber die Kern-Textdomain `pods`. Aufschluesselung
+  (gemessen mit `python3 scripts/s20-i18n-count.py`): 33 i18n-Aufrufe mit
+  Domain `pods-repeater` in der Quelle, im Paket 33 mit Domain `pods`;
+  35 Literale `pods-repeater` in der Quelle, 34 `pods`-Literale im Paket
+  (eines davon im Datei-Kommentar), 0 verbleibende `pods-repeater`-Literale;
+  dazu 13 CSS-Klassen `pods-repeater-*`, die als `pods-*` mitportiert werden.
+  `grep -c` zaehlt hier Zeilen, nicht Aufrufe — 31 Zeilen mit 34 Literalen.
 
 ## 4. Nach dem Einreichen
 
