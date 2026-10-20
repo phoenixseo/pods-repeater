@@ -14,7 +14,7 @@
 # Das laufende wp-env faehrt 7.1.3 und belegt damit "Tested up to".
 #
 # Voraussetzungen:
-#   - /home/hermes/.hermes/profiles/neo/cache/scratch/wp68/wordpress (6.8.2)
+#   - $SCRATCH/wp68/wordpress (WordPress 6.8.2 entpackt)
 #   - Images php74-wp:local und php83-wp:local (php:8.3-cli ohne mysqli/zip
 #     reicht nicht; siehe scratch/php83-wp/Dockerfile)
 #   - Netz wp-env-pods-repeater-54d58dae_default (MariaDB erreichbar)
@@ -22,8 +22,8 @@
 # Aufruf: bash scripts/s22-min-version-matrix.sh [7.4|8.3|beide]
 set -eu
 
-REPO="${REPO:-/home/hermes/hermes_agent/workspaces/phoenixseo/sdc-page-builder/pods-repeater}"
-SCRATCH="${SCRATCH:-/home/hermes/.hermes/profiles/neo/cache/scratch}"
+REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
+SCRATCH="${SCRATCH:-${TMPDIR:-/tmp}/pods-repeater-build}"
 WP68="${WP68:-$SCRATCH/wp68/wordpress}"
 NET="${NET:-wp-env-pods-repeater-54d58dae_default}"
 IMG74="${IMG74:-php74-wp:local}"

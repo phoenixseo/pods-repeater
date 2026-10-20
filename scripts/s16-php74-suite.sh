@@ -15,8 +15,8 @@
 # und Netz wp-env-pods-repeater-54d58dae_default mit erreichbarer MariaDB.
 set -eu
 
-REPO="${REPO:-/home/hermes/hermes_agent/workspaces/phoenixseo/sdc-page-builder/pods-repeater}"
-WORK="${WORK:-/home/hermes/.hermes/profiles/neo/cache/scratch/php74-build}"
+REPO="${REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
+WORK="${WORK:-${TMPDIR:-/tmp}/pods-repeater-php74}"
 WPCT="${WPCT:-wp-env-pods-repeater-54d58dae-wordpress-1}"
 NET="${NET:-wp-env-pods-repeater-54d58dae_default}"
 IMG="${IMG:-php74-wp:local}"

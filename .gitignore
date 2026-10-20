@@ -28,3 +28,7 @@ __pycache__/
 # OS / editor
 .DS_Store
 *.log
+
+# Release-Artefakte: haengen an GitHub-Releases, nicht in die History
+/dist/release/*.zip
+/dist/release/*.manifest.txt

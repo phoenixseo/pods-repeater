@@ -1,48 +1,89 @@
 # Pods Repeater Field
 
-Repeatable field groups (ACF-Repeater equivalent) for [Pods](https://pods.io) — as a **generic, community-first** field type. SDC Page Builder is one consumer among many.
+Repeatable field groups for [Pods](https://pods.io) — the feature ACF calls a "Repeater", as a standalone field type.
 
-**Status:** In development — Phase A complete (JSON roundtrip verified, commit `8c0863b`); Phase-B wave (commit `f70fd01`) complete: T4 admin rendering (`24e355c`), T5 judge fixes (`fffe483`), E2E browser test in the admin (two real bugs found and fixed: removeRow JS crash, raw JSON string path in `input()`), i18n completeness. WPUnit test base added (`5cfca96`: PHPUnit 9.6 + WordPress test library, `RepeaterRoundtripTest`: 3 tests / 26 assertions green). Release prep done (`8edcf42`): `readme.txt` (wp.org format) + `.phpcs.xml` (Pods-style WPCS rules, 0 errors). Not production-ready yet — next: Phase C per master plan.
+Pods can repeat a *single* value. It cannot repeat a *group* of fields. This plugin adds a `repeater` field type: you define a set of sub-fields once, and the editor can add, remove and reorder rows of them.
 
-## Why
+**Status: `0.3.0-alpha`.** It works and it is tested, but it has not seen much use outside this repository. Read [Known limitations](#known-limitations) before you build on it.
 
-Pods supports simple repeatable fields (single values) but **not repeatable field groups** — a configurable set of sub-fields that repeats. This has been requested for years (Discussion [#7238](https://github.com/pods-framework/pods/discussions/7238), Issue [#109](https://github.com/pods-framework/pods/issues/109)).
+## Why this exists
 
-This plugin adds a `repeater` field type: a group of scalar sub-fields (text, textarea, select, number, url) stored as JSON, with a server-side repeatable admin UI (add/remove/move rows).
+Repeatable field groups have been requested in Pods for years ([Issue #109](https://github.com/pods-framework/pods/issues/109), [Discussion #7238](https://github.com/pods-framework/pods/discussions/7238)) and are still not in core. This plugin implements the feature outside of core: usable now, adoptable into core later if the maintainers want it.
 
-## Strategy
+## Requirements
 
-1. **Generic plugin first** — standalone, wp.org-ready, own release cycle.
-2. **PR to pods-framework/pods** (Phase 1: PHP field type) so the maintainer can adopt it and the whole community benefits. The PR is an option, not a requirement — the plugin lives independently either way.
-3. SDC Page Builder builds on top of this field type afterwards.
+| | |
+|---|---|
+| WordPress | 6.8 or newer |
+| PHP | 7.4 or newer |
+| Pods | 3.3.9.1 or newer, active |
+| License | GPL-2.0-or-later |
 
-See the [master plan](https://github.com/phoenixseo/sdc-page-builder/blob/main/plan/realistischer-masterplan.md) (Vault) for the full strategy.
+The test suite runs against the WordPress 6.8.2 test library on PHP 7.4 and PHP 8.3. The plugin itself is exercised on WordPress 7.1 with Pods 3.3.9.1.
 
-## Install (dev)
+## Install
 
-```bash
-# wp-env (Docker) — WP + Pods 3.3.9.1 + this plugin
-npx wp-env start
-npx wp-env run cli wp plugin list
+Download the release zip and upload it under *Plugins → Add New → Upload Plugin*, or clone this repository into `wp-content/plugins/pods-repeater`.
+
+## Quick start
+
+1. **Define the sub-fields.** *Pods → Field Groups* (`wp-admin/admin.php?page=pods-repeater-groups`) — add a group, for example `track` with `nr` (number), `titel` (text), `laenge` (text), `stil` (text).
+2. **Add the field.** Edit your Pod, add a field of type **Repeater**, and pick the field group you just created.
+3. **Edit content.** The post editor renders a table: one row per entry, with *Add row*, *Remove* and up/down buttons. It saves as a normal form POST — no React, no build step, works with the classic editor and inside Pods' own forms.
+4. **Read it in a template.**
+
+```php
+// Plain Pods API: an array of rows.
+$tracks = get_post_meta( get_the_ID(), 'tracks', true ); // JSON string
+$rows   = pods_repeater_get_rows( 'tracks', get_the_ID(), 'platte' );
+
+// ACF-compatible loop (aliases can be disabled via the
+// pods_repeater_register_acf_aliases filter):
+if ( have_rows( 'tracks', get_the_ID() ) ) {
+	while ( have_rows( 'tracks', get_the_ID() ) ) {
+		the_row();
+		echo esc_html( get_sub_field( 'nr' ) . ' — ' . get_sub_field( 'titel' ) );
+	}
+}
 ```
 
-## Field type
+Sub-fields can also be defined inline as JSON in the field options (`repeater_sub_fields`) if you would rather not use the field group screen. The screen is the recommended path — it validates types and labels for you.
 
-| Property | Value |
-|---|---|
-| Type | `repeater` |
-| Class | `Pods_Repeater_Field` (plugin prefix; port to core = `PodsField_Repeater`) |
-| Storage | JSON string in `wp_postmeta` / `longtext` (table-based) |
-| UI | Server-side (`input()` + vanilla JS, no DFV-React, no build) |
-| Sub-fields | JSON config in field options (`repeater_sub_fields`) |
+## Storage
 
-## Roadmap
+Rows are stored as one JSON string in `wp_postmeta`, or in the Pods table column for table-based Pods. No extra tables, no custom schema, no serialized PHP.
 
-- [x] Phase A — Spike: JSON roundtrip (T3/T5) in wp-env (Commit `8c0863b`)
-- [ ] Phase B — Plugin MVP: production-ready for foreign users
-- [ ] Phase C — PR Phase 1 to pods-framework/pods
-- [ ] Phase D — Feedback window; builder on the plugin
+## Which sub-field types work
+
+```text
+text, textarea, paragraph, wysiwyg, code,
+number, website, email, password,
+date, time, datetime, color, boolean, pick
+```
+
+`pick` covers select, radio and checkbox as long as the options are defined on the sub-field. The list is filterable via `pods_repeater_supported_sub_types`.
+
+`file`, `avatar` and `oembed` are **not** supported inside a row — see below.
+
+## Known limitations
+
+- **No `file` / `avatar` / `oembed` sub-fields.** Those types render through Pods' React field editor, which does not initialise inside a cloned row: from row two on the picker would be dead. Put such a field on the Pod itself instead of inside the row.
+- **No nested repeaters.** A repeater cannot contain another repeater. The server rejects the configuration and strips such values on write.
+- **Field groups are managed in the admin only.** No WP-CLI, REST or import/export route for the field-group registry yet.
+- **No ACF data migration.** Existing ACF Repeater data is not imported; this field stores its own JSON.
+- **No block-editor UI.** The field renders server-side; Gutenberg and the REST API see the stored value.
+
+## Development
+
+```bash
+npx wp-env start
+npx wp-env run cli --env-cwd=wp-content/plugins/pods-repeater vendor/bin/phpunit --testsuite PodsRepeater
+```
+
+127 tests, 2455 assertions, green on PHP 7.4 and 8.3. The suite uses the WordPress PHPUnit test library (6.8.2) with Pods loaded from the running instance.
+
+`scripts/build-release-package.sh` builds the release zip from an allowlist. `scripts/verify-pr-package.sh` checks the portable copy of the field class against the source, so the file meant for a core PR cannot drift from the plugin.
 
 ## License
 
-GPL-2.0-or-later
+GPL-2.0-or-later, see [LICENSE](LICENSE).

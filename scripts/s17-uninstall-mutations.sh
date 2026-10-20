@@ -10,7 +10,7 @@
 set -u
 
 CONTAINER="wp-env-pods-repeater-54d58dae-cli-1"
-ORIG="${ORIG:-/home/hermes/.hermes/profiles/neo/cache/scratch/uninstall.php.orig}"
+ORIG="${ORIG:-${TMPDIR:-/tmp}/uninstall.php.orig}"
 WS="/var/www/html/wp-content/plugins/pods-repeater"
 
 run_suite() {

@@ -41,7 +41,7 @@ const { chromium } = require( 'playwright' );
 const HERE = dirname( fileURLToPath( import.meta.url ) );
 const ROOT = resolve( HERE, '..' );
 
-const BASE_URL = ( process.env.BASE_URL || 'http://100.67.225.184:8899' ).replace( /\/+$/, '' );
+const BASE_URL = ( process.env.BASE_URL || 'http://localhost:8899' ).replace( /\/+$/, '' );
 const WP_USER = process.env.WP_USER || 'admin';
 const WP_PASS = process.env.WP_PASS || 'password';
 const CLI_CONTAINER = process.env.WP_CLI_CONTAINER || 'wp-env-pods-repeater-54d58dae-cli-1';
