@@ -16,6 +16,8 @@
 #   5. Inhaltliche Mindestpruefung (seit S15):
 #      - alle erwarteten Artefakte vorhanden und nicht leer
 #      - Testmethoden portiert == Testmethoden in der Quelle (je Datei)
+#      - Summe >= 40 (10+19+4+7), nicht nur "irgendwas portiert"
+#      - Nested-Zusage im Text nur mit dem portierten Nested-Test daneben
 #      - Felddatei ohne 'pods-repeater', JS-Skript ohne 'pods-repeater-'
 #      - PR-Beschreibung, Discussion-Kommentar und Checkliste nicht leer
 set -uo pipefail
@@ -85,6 +87,7 @@ check_artifacts() {
     "tests/wpunit/PodsRepeaterTest.php"
     "tests/wpunit/PodsRepeaterContractTest.php"
     "tests/wpunit/PodsRepeaterCoreIntegrationTest.php"
+    "tests/wpunit/PodsRepeaterNestedTest.php"
     "readme-changelog.txt"
     "PR-BESCHREIBUNG.md"
     "DISCUSSION-KOMMENTAR.md"
@@ -104,6 +107,7 @@ check_test_counts() {
     "tests/RepeaterLimitTest.php:tests/wpunit/PodsRepeaterTest.php"
     "tests/RepeaterContractTest.php:tests/wpunit/PodsRepeaterContractTest.php"
     "tests/CoreIntegrationTest.php:tests/wpunit/PodsRepeaterCoreIntegrationTest.php"
+    "tests/RepeaterNestedTest.php:tests/wpunit/PodsRepeaterNestedTest.php"
   )
   local total=0
   for pair in "${pairs[@]}"; do
@@ -122,7 +126,10 @@ check_test_counts() {
     total=$((total + ported_count))
   done
   printf '  Tests gesamt%-42s %2s\n' "" "${total}"
-  [[ "${total}" -ge 33 ]] || DIE "Nur ${total} Testmethoden im Paket (erwartet mindestens 33: 10+19+4)"
+  # Untergrenze 40 = 10+19+4+7. Die Summe wird hier nachgezaehlt, nicht aus der
+  # Quelle uebernommen: faellt eine Datei aus der Portierung, muss der Lauf
+  # rot werden und nicht still kleiner.
+  [[ "${total}" -ge 40 ]] || DIE "Nur ${total} Testmethoden im Paket (erwartet mindestens 40: 10+19+4+7)"
 }
 
 check_porting_residue() {
@@ -157,15 +164,40 @@ check_pr_text() {
   grep -qi 'Nicht enthalten' "${desc}" || \
     DIE "PR-Beschreibung nennt nicht, was bewusst fehlt"
 
+  # Die Nested-Zusage nennt die Checkliste; dort steht die Kern-Voraussetzung
+  # (Gruppenmarke). Beides muss zusammenpassen: der Verweis auf eine Datei,
+  # die den Test nicht kennt, ist eine Behauptung ohne Beleg.
+  grep -q "PodsRepeaterNestedTest.php" "${CHECK_DIR}/CHECKLISTE.md" || \
+    DIE "Checkliste nennt den Nested-Test nicht — die Durchsicht vor dem Einreichen kennt ihn dann nicht"
+
   # Die Testzahl muss aus dem Build stammen, nicht aus dem Kopf: die
   # Beschreibung muss die Gesamtzahl der portierten Tests enthalten.
   local total
   total="$(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterTest.php" || true)"
   total=$((total \
     + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterContractTest.php" || true) \
-    + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterCoreIntegrationTest.php" || true) ))
+    + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterCoreIntegrationTest.php" || true) \
+    + $(grep -c 'public function test_' "${CHECK_DIR}/tests/wpunit/PodsRepeaterNestedTest.php" || true) ))
   grep -q "${total} Testmethoden" "${desc}" || \
     DIE "PR-Beschreibung nennt nicht '${total} Testmethoden' (Zahl aus dem Build)"
+
+  # Der Discussion-Kommentar ist der Text, den ein Fremder liest — die
+  # Testzahl darin muss ebenfalls aus dem Build stammen. Sie stand dort bis
+  # S21 fest als "33" im Heredoc und wanderte beim Testzuwachs nicht mit.
+  grep -q "${total} Testmethoden" "${CHECK_DIR}/DISCUSSION-KOMMENTAR.md" || \
+    DIE "Discussion-Kommentar nennt nicht '${total} Testmethoden' (Zahl aus dem Build)"
+
+  # Die Nested-Zusage im Text braucht ihren Beleg im Paket: steht die Meldung
+  # von validate() in der Beschreibung, muss der Test sie auch pruefen.
+  # Den Satz zur Ablehnung woertlich treffen, nicht nur die Meldung: der
+  # Meldungstext steht auch in der Code-Erlaeuterung (Z. ~143), der Satz
+  # "Verschachtelte Repeater werden serverseitig abgelehnt" ist die Zusage.
+  if grep -qi 'verschachtelte Repeater werden serverseitig abgelehnt' "${desc}"; then
+    grep -q "Nested repeaters are not supported" "${CHECK_DIR}/tests/wpunit/PodsRepeaterNestedTest.php" || \
+      DIE "PR-Beschreibung behauptet die Nested-Ablehnung, der portierte Test prueft die Meldung nicht"
+    grep -q "PodsRepeaterNestedTest" "${desc}" || \
+      DIE "PR-Beschreibung behauptet die Nested-Ablehnung ohne den zugehoerigen Test zu nennen"
+  fi
 
   # Kein Plugin-Praefix in der Beschreibung: die Feldklasse prueft im Kern
   # `repeater_get_groups()` / `repeater_get_group_fields()`. Stand hier

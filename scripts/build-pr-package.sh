@@ -10,6 +10,7 @@
 #   tests/wpunit/PodsRepeaterTest.php            Limit-Test
 #   tests/wpunit/PodsRepeaterContractTest.php    Vertragstest (S12)
 #   tests/wpunit/PodsRepeaterCoreIntegrationTest.php  Integrationsbeleg (S13)
+#   tests/wpunit/PodsRepeaterNestedTest.php      Nested-Ablehnung (S21)
 #   readme-changelog.txt              Changelog-Block fuer Pods' readme.txt
 #   PR-BESCHREIBUNG.md                Merge-Begruendung fuer den Kern
 #   DISCUSSION-KOMMENTAR.md           Entwurf fuer Discussion #7238
@@ -42,18 +43,23 @@ OUT_DIR="${PR_OUT_DIR:-${REPO_ROOT}/dist/pods-pr}"
 
 SOURCE_FIELD="${REPO_ROOT}/classes/fields/repeater.php"
 
-# Alle drei Testdateien, die der PR mitbringt. Der Limit-Test ist die
+# Alle vier Testdateien, die der PR mitbringt. Der Limit-Test ist die
 # aelteste Zusage (serverseitige Durchsetzung), der Vertragstest (S12) prueft
-# den Feldtyp als Ganzes, der Integrationsbeleg (S13) die Kern-Registrierung.
+# den Feldtyp als Ganzes, der Integrationsbeleg (S13) die Kern-Registrierung,
+# der Nested-Test (S21) die Ablehnung verschachtelter Repeater. Jede Datei
+# traegt eine Zusage aus den Dokumenten — fehlt eine, behauptet der PR mehr,
+# als er beweist.
 SOURCE_TESTS=(
   "${REPO_ROOT}/tests/RepeaterLimitTest.php"
   "${REPO_ROOT}/tests/RepeaterContractTest.php"
   "${REPO_ROOT}/tests/CoreIntegrationTest.php"
+  "${REPO_ROOT}/tests/RepeaterNestedTest.php"
 )
 TARGET_TESTS=(
   "PodsRepeaterTest.php"
   "PodsRepeaterContractTest.php"
   "PodsRepeaterCoreIntegrationTest.php"
+  "PodsRepeaterNestedTest.php"
 )
 
 DIE() { printf 'FEHLER: %s\n' "$*" >&2; exit 1; }
@@ -108,7 +114,11 @@ for i in "${!SOURCE_TESTS[@]}"; do
   TEST_COUNTS+=("${ported_count}")
 done
 
-TEST_TOTAL=$(( ${TEST_COUNTS[0]} + ${TEST_COUNTS[1]} + ${TEST_COUNTS[2]} ))
+TEST_TOTAL=0
+for count in "${TEST_COUNTS[@]}"; do
+  TEST_TOTAL=$(( TEST_TOTAL + count ))
+done
+TEST_FILES=${#TEST_COUNTS[@]}
 
 # ---------------------------------------------------------------------------
 # 3b. Admin-Skript portieren
@@ -173,6 +183,7 @@ Der PR ist **additiv**. Er aendert keine bestehende Kern-Datei:
 | `tests/wpunit/PodsRepeaterTest.php` | neu |
 | `tests/wpunit/PodsRepeaterContractTest.php` | neu |
 | `tests/wpunit/PodsRepeaterCoreIntegrationTest.php` | neu |
+| `tests/wpunit/PodsRepeaterNestedTest.php` | neu |
 | `readme.txt` / `changelog.txt` | ein Eintrag |
 
 Er nutzt vier bestehende Kern-Schnittstellen, alle unveraendert:
@@ -239,7 +250,7 @@ mitreissen.
 
 ## Tests
 
-{{TOTAL}} Testmethoden in drei Dateien, alle {{BT}}WP_UnitTestCase{{BT}}, keine
+{{TOTAL}} Testmethoden in {{TFILES}} Dateien, alle {{BT}}WP_UnitTestCase{{BT}}, keine
 Fixtures, keine Netzwerkzugriffe:
 
 | Datei | Testmethoden | deckt ab |
@@ -247,11 +258,12 @@ Fixtures, keine Netzwerkzugriffe:
 | {{BT}}PodsRepeaterTest.php{{BT}} | {{C0}} | serverseitiges Limit: {{BT}}validate(){{BT}} meldet, {{BT}}pre_save(){{BT}} schneidet zurueck, leere Template-Zeilen zaehlen nicht |
 | {{BT}}PodsRepeaterContractTest.php{{BT}} | {{C1}} | Feldtyp als Ganzes: {{BT}}validate(){{BT}}-Rueckgabevertrag, echter Save ueber die Pods-API, {{BT}}value(){{BT}}, {{BT}}display(){{BT}}, Options- und CSS-Vertrag |
 | {{BT}}PodsRepeaterCoreIntegrationTest.php{{BT}} | {{C2}} | Kern-Integration: Registrierung, Konventionspfad, Laden aus dem Kern-Verzeichnis, Save-Vertrag |
+| {{BT}}PodsRepeaterNestedTest.php{{BT}} | {{C3}} | verschachtelte Repeater: {{BT}}validate(){{BT}} lehnt Sub-Felder vom Typ {{BT}}repeater{{BT}} ab (Meldung mit Sub-Feld-Label, vor Limit/required), {{BT}}pre_save(){{BT}} verwirft die Werte; Gegenproben: legitime Felder bleiben gueltig |
 
-Im Plugin-Repo laufen alle drei Dateien in der Standard-Suite mit. Die
-portierten Fassungen von Vertrag und Kern-Integration tragen zusaetzlich die
-Gruppenmarke {{BT}}@group podscore{{BT}}: im Pods-Repo wuerden sie sonst
-gegen eine Feldklasse laufen, die es dort erst mit diesem PR gibt.
+Im Plugin-Repo laufen alle {{TFILES}} Dateien in der Standard-Suite mit. Die
+portierten Fassungen von Vertrag, Kern-Integration und Nested-Ablehnung tragen
+zusaetzlich die Gruppenmarke {{BT}}@group podscore{{BT}}: im Pods-Repo wuerden
+sie sonst gegen eine Feldklasse laufen, die es dort erst mit diesem PR gibt.
 
 ## Feldgruppen-Registry: im Kern nicht enthalten
 
@@ -274,10 +286,31 @@ Portierung ist keine Skizze, sondern der Code, der dort schreibt und liest.
 
 ## Nicht enthalten (bewusst)
 
-- Verschachtelte Repeater (Repeater in Repeater): gesperrt, mit sichtbarem
-  Hinweis im Editor. Nachruestbar, aber ein eigenes Datenformat-Thema.
 - Ein React-DFV-Editor fuer die Sub-Feld-Konfiguration: die Konfiguration
   ist zunaechst JSON bzw. eine Feldgruppe (siehe oben).
+
+## Verschachtelte Repeater: abgelehnt, nicht nur im Editor gesperrt
+
+Ein Repeater in einem Repeater waere ein eigenes Datenformat-Thema.
+Verschachtelte Repeater werden serverseitig abgelehnt, nicht bloss im UI
+versteckt:
+
+- {{BT}}validate(){{BT}} prueft die Sub-Feldtypen vor Limit und
+  {{BT}}required{{BT}} und liefert fuer ein Sub-Feld vom Typ {{BT}}repeater{{BT}}
+  ein Meldungs-Array mit dem Label des betroffenen Feldes
+  ({{BT}}Nested repeaters are not supported: "…"{{BT}}). Die Meldung nennt das
+  Sub-Feld, damit der Redakteur es findet; fehlt das Label, steht der Name da.
+- {{BT}}pre_save(){{BT}} verwirft das betroffene Sub-Feld auf Schreibwegen, die
+  nicht validieren (REST, {{BT}}pods()->save(){{BT}}, Import).
+- Die Gegenprobe steht mit im Test: dieselbe Struktur ohne
+  {{BT}}repeater{{BT}}-Sub-Feld bleibt gueltig, und {{BT}}pre_save(){{BT}}
+  speichert legitime Werte vollstaendig.
+
+Belegt durch {{BT}}PodsRepeaterNestedTest.php{{BT}} ({{C3}} Testmethoden); die
+Kern-Voraussetzung (Gruppenmarke) steht in der Checkliste, Abschnitt 2.
+Zusaetzlich schliesst die Feldgruppen-Registry des Plugins den Typ aus; die
+Inline-JSON-Konfiguration ({{BT}}repeater_sub_fields{{BT}}) geht an dieser
+Registry vorbei, deshalb die Pruefung in der Feldklasse selbst.
 PRDESC
 
 # Platzhalter einsetzen. Das Heredoc ist bewusst quoted ('PRDESC'), damit
@@ -285,13 +318,30 @@ PRDESC
 # die Inline-Code-Markierungen als Command-Substitution ausgefuehrt und
 # jeden Backtick-Ausdruck durch eine leere Zeichenkette ersetzt.
 PR_DESC="${OUT_DIR}/PR-BESCHREIBUNG.md"
-sed -i \
-  -e "s/{{TOTAL}}/${TEST_TOTAL}/g" \
-  -e "s/{{C0}}/${TEST_COUNTS[0]}/g" \
-  -e "s/{{C1}}/${TEST_COUNTS[1]}/g" \
-  -e "s/{{C2}}/${TEST_COUNTS[2]}/g" \
-  -e "s/{{BT}}/\`/g" \
-  "${PR_DESC}"
+# Zaehler und Dateien muessen deckungsgleich sein; sonst beendet sich das
+# Skript mit "unbound variable" statt mit einer Meldung, die den Fehler nennt.
+if [[ ${#TEST_COUNTS[@]} -ne ${#TARGET_TESTS[@]} ]]; then
+  DIE "TEST_COUNTS (${#TEST_COUNTS[@]}) und TARGET_TESTS (${#TARGET_TESTS[@]}) passen nicht zusammen"
+fi
+# sed-Ausdruecke aus den Zaehlern bauen statt {{C0}}..{{C3}} zu verdrahten:
+# eine fuenfte Testdatei soll nur einen Eintrag in SOURCE_TESTS/TARGET_TESTS
+# kosten und nicht still in ein 'unbound variable' laufen.
+SED_ARGS=(
+  -e "s/{{TOTAL}}/${TEST_TOTAL}/g"
+  -e "s/{{TFILES}}/${TEST_FILES}/g"
+  -e "s/{{BT}}/\`/g"
+)
+for i in "${!TEST_COUNTS[@]}"; do
+  SED_ARGS+=( -e "s/{{C${i}}}/${TEST_COUNTS[$i]}/g" )
+done
+sed -i "${SED_ARGS[@]}" "${PR_DESC}"
+
+# Jede portierte Datei muss im Text mit ihrer Zahl auftauchen. Der Test nennt
+# sonst eine Zusage ohne Beleg — genau der Fehler, den S22 gerade behebt.
+for i in "${!TARGET_TESTS[@]}"; do
+  grep -q "${TARGET_TESTS[$i]}\` | ${TEST_COUNTS[$i]}" "${PR_DESC}" || \
+    DIE "PR-Beschreibung fuehrt ${TARGET_TESTS[$i]} nicht mit ${TEST_COUNTS[$i]} Testmethoden auf"
+done
 
 # Kein Platzhalter darf stehenbleiben, und die Testzahl muss drin sein.
 grep -q '{{' "${PR_DESC}" && DIE "PR-Beschreibung enthaelt unersetzte Platzhalter"
@@ -335,9 +385,10 @@ Was der PR mitbringt:
   `PodsForm::register_field_type()` registriert wie jeder andere Feldtyp.
 - Sub-Felder rendern durch `PodsForm::field()`, also mit den Sanitizern und
   Optionen des Kerns.
-- 33 Testmethoden in drei Dateien gegen Pods 3.3.9.1: Limit-Invariante,
-  Feldvertrag, Kern-Integration (Registrierung, Konventionspfad,
-  Save-Vertrag). Keine Fixtures, kein Netzwerk.
+- {{TOTAL}} Testmethoden in {{TFILES}} Dateien gegen Pods 3.3.9.1:
+  Limit-Invariante, Feldvertrag, Kern-Integration (Registrierung,
+  Konventionspfad, Save-Vertrag) und die serverseitige Ablehnung
+  verschachtelter Repeater. Keine Fixtures, kein Netzwerk.
 - Admin-UI im echten Browser geprueft: 18 Schritte, 18 PASS (Lauf 4) —
   Zeile anlegen, Limit greift, verschieben, loeschen, speichern, Werte nach
   dem Neuladen korrekt; der Feldgruppen-Pfad laeuft mit, ohne Inline-JSON.
@@ -404,27 +455,27 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
 
 - [ ] `bash scripts/build-pr-package.sh && bash scripts/verify-pr-package.sh`
       — muss durchlaufen, Ausgabe ohne `FEHLER`.
-- [ ] `php -l` auf den drei portierten Testdateien und der Feldklasse
+- [ ] `php -l` auf den vier portierten Testdateien und der Feldklasse
       (im Container, nicht auf dem Host).
 - [ ] Testzahlen in `PR-BESCHREIBUNG.md` gegen den eigenen Suite-Lauf
       abgleichen (der Generator setzt sie beim Bauen ein).
 - [ ] `grep -c 'pods-repeater' dist/pods-pr/classes/fields/repeater.php` —
       muss 0 sein (nur `pods-*`-CSS-Klassen duerfen bleiben, sie tragen
       keinen Domain-Suffix).
-- [ ] Gruppenmarke pruefen: die portierten Fassungen von Vertrag und
-      Kern-Integration tragen `@group podscore`. Im Plugin-Repo laufen sie in
-      der Standard-Suite mit; im Pods-Repo wuerde die Suite ohne die Marke rot,
-      weil die Feldklasse dort erst mit dem PR existiert.
+- [ ] Gruppenmarke pruefen: die portierten Fassungen von Vertrag,
+      Kern-Integration und Nested-Ablehnung tragen `@group podscore`. Im
+      Plugin-Repo laufen sie in der Standard-Suite mit; im Pods-Repo wuerde die
+      Suite ohne die Marke rot, weil die Feldklasse dort erst mit dem PR
+      existiert.
+- [ ] Nested-Ablehnung gegenlesen: `tests/wpunit/PodsRepeaterNestedTest.php`
+      haelt fest, dass `validate()` einen Sub-Typ `repeater` meldet (Meldung
+      mit Sub-Feld-Label, vor Limit und `required`) und `pre_save()` die
+      verschachtelten Werte verwirft. Die zwei Gegenproben (legitime Felder
+      bleiben gueltig) gehoeren dazu — sie sind der Beleg, dass der Guard nicht
+      zu breit greift.
 
 ## 3. Was im Paket bewusst fehlt
 
-- Verschachtelte Repeater — gesperrt, aber nur im Editor: der Guard bei
-  `classes/fields/repeater.php:580-581` gibt den Hinweis aus,
-  `validate()` (ab Z. 288) filtert den Sub-Typ **nicht**. Ein per JSON oder
-  Feldgruppe eingeschleuster `repeater`-Sub-Typ wird also nicht serverseitig
-  abgelehnt. Wer das als Luecke sieht, hat recht — die Absicherung in
-  `validate()` fehlt und ist bewusst nicht nachgezogen (Code-Aenderung waere
-  nicht Teil dieses Sprints).
 - React-DFV-Editor fuer die Sub-Feld-Konfiguration — Konfiguration ist
   zunaechst JSON bzw. eine Feldgruppe.
 - Die Feldgruppen-Registry — Plugin-Konzept, im Kern nicht enthalten. Der
@@ -449,6 +500,23 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
       Assertion abschwaechen, um Review-Kommentare zu erfuellen.
 CHECKLISTE
 
+# Platzhalter einsetzen. Das Heredoc ist bewusst quoted ('DISCUSSION'), damit
+# Backticks und ${...} im Text stehen bleiben — ein unquoted Heredoc haette
+# die Inline-Code-Markierungen als Command-Substitution ausgefuehrt und
+# jeden Backtick-Ausdruck durch eine leere Zeichenkette ersetzt. Weil das
+# quoted ist, muessen die Platzhalter hier separat ersetzt werden; der
+# frueher fest eingetragene Wert "33" ist genau daran veraltet stehen
+# geblieben.
+DISCUSSION_DOC="${OUT_DIR}/DISCUSSION-KOMMENTAR.md"
+sed -i \
+  -e "s/{{TOTAL}}/${TEST_TOTAL}/g" \
+  -e "s/{{TFILES}}/${TEST_FILES}/g" \
+  "${DISCUSSION_DOC}"
+
+grep -q '{{' "${DISCUSSION_DOC}" && DIE "Discussion-Kommentar enthaelt unersetzte Platzhalter"
+grep -q "${TEST_TOTAL} Testmethoden" "${DISCUSSION_DOC}" || \
+  DIE "Discussion-Kommentar nennt die Testzahl ${TEST_TOTAL} nicht"
+
 # ---------------------------------------------------------------------------
 # 8. Selbstpruefung: alle Artefakte vorhanden und nicht leer
 # ---------------------------------------------------------------------------
@@ -456,6 +524,7 @@ for artifact in "${FIELD_OUT}" "${JS_OUT}" \
                 "${OUT_DIR}/tests/wpunit/PodsRepeaterTest.php" \
                 "${OUT_DIR}/tests/wpunit/PodsRepeaterContractTest.php" \
                 "${OUT_DIR}/tests/wpunit/PodsRepeaterCoreIntegrationTest.php" \
+                "${OUT_DIR}/tests/wpunit/PodsRepeaterNestedTest.php" \
                 "${OUT_DIR}/readme-changelog.txt" \
                 "${OUT_DIR}/PR-BESCHREIBUNG.md" \
                 "${OUT_DIR}/DISCUSSION-KOMMENTAR.md" \

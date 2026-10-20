@@ -18,6 +18,12 @@ Drei Quellen mit drei unterschiedlichen Aufgaben:
                                    übersetzt (PODS_DIR statt
                                    PODS_REPEATER_DIR), Klassen- und
                                    Pod-Prefixe auf `repeater_`.
+  tests/RepeaterNestedTest.php     Ablehnung verschachtelter Repeater (S21):
+                                   Klassenname und Kopf, `@group podscore`
+                                   (läuft im Kern nur mit der Feldklasse aus
+                                   diesem PR), Plugin-Registry-Name und
+                                   Bootstrap-Meldung auf Kern-Namen. Die
+                                   Assertions bleiben unangetastet.
 
 Exit 1 mit Meldung auf stderr, wenn eine Ersetzung nicht greift. Jede
 Ersetzung wird gezählt; ein Muster, das nicht mehr greift, ist ein Fehler
@@ -50,6 +56,10 @@ MIN_DOMAIN_REPLACEMENTS = {
     "RepeaterLimitTest": 0,      # keine i18n-Aufrufe, nur CSS-Klasse + Kommentar
     "RepeaterContractTest": 0,   # keine i18n-Aufrufe (gemessen)
     "CoreIntegrationTest": 0,    # keine i18n-Aufrufe (gemessen)
+    # RepeaterNestedTest prueft die Meldung von validate(); die Meldung selbst
+    # entsteht in der Feldklasse (dort wird die Textdomain ersetzt), der Test
+    # zitiert nur das englische Literal aus validate().
+    "RepeaterNestedTest": 0,
 }
 
 
@@ -297,10 +307,107 @@ def port_integration(text: str) -> str:
     return text
 
 
+def port_nested(text: str) -> str:
+    """Portierung der Nested-Repeater-Ablehnung (S21).
+
+    Was sich ändert (und was nicht):
+
+      Kopf:    `@package PodsRepeater` -> `@package Pods` plus `@group
+               podscore`. Die Marke ist nötig, weil der Test eine Feldklasse
+               prüft, die es im Pods-Repo erst mit diesem PR gibt; ohne die
+               Marke liefe er dort gegen eine fehlende Klasse und würde rot.
+      Namen:   Klassenname `RepeaterNestedTest` -> `PodsRepeaterNestedTest`,
+               Plugin-Registry-Funktion `pods_repeater_supported_sub_types`
+               -> `repeater_supported_sub_types` (im Kern ohne Prefix), und in
+               der Bootstrap-Meldung steht der Kern statt des Plugins.
+      Rest:    unangetastet. Die Assertions sind der Beleg; wer hier eine
+               abschwächt, nimmt dem PR die Beweiskraft. Darum prüft der
+               Porter unten namentlich die Aussagen, die die Zusage tragen —
+               fehlt eine, bricht der Build statt still durchzulaufen.
+    """
+    if "@package PodsRepeater\n */" not in text:
+        fail("Kopfkommentar von RepeaterNestedTest endet nicht mit '@package PodsRepeater'")
+
+    text = text.replace(
+        "@package PodsRepeater\n */",
+        "@package Pods\n *\n * @group podscore\n */",
+        1,
+    )
+
+    class_from = "class RepeaterNestedTest extends WP_UnitTestCase {"
+    class_to = "class PodsRepeaterNestedTest extends WP_UnitTestCase {"
+    if class_from not in text:
+        fail(f"Klassendeklaration nicht gefunden: {class_from}")
+    text = text.replace(class_from, class_to)
+    text = text.replace(
+        " * Class RepeaterNestedTest\n",
+        " * Class PodsRepeaterNestedTest\n",
+    )
+    # Der Datei-Kopf beginnt mit dem Klassennamen ("RepeaterNestedTest —
+    # serverseitige Ablehnung ..."); im Kern traegt er denselben Namen wie die
+    # Klasse, sonst zeigt der Kopf auf einen Namen, den die Datei nicht hat.
+    header_line = " * RepeaterNestedTest — serverseitige Ablehnung verschachtelter Repeater."
+    if header_line not in text:
+        fail("Kopfzeile von RepeaterNestedTest nicht gefunden")
+    text = text.replace(
+        header_line,
+        " * PodsRepeaterNestedTest — serverseitige Ablehnung verschachtelter Repeater.",
+    )
+
+    # Plugin-Registry: im Kern heißt die Funktion ohne Prefix. Sie wird im
+    # Test nur im Kopfkommentar als Fundstelle genannt (die Durchsetzung im
+    # Kern prüft die Feldklasse selbst), der Name muss aber stimmen — sonst
+    # verweist der Kommentar auf eine Funktion, die es im Kern nicht gibt.
+    supported_from = "pods_repeater_supported_sub_types()"
+    supported_to = "repeater_supported_sub_types()"
+    if supported_from not in text:
+        fail(f"Erwartete Fundstelle fehlt: {supported_from}")
+    text = text.replace(supported_from, supported_to)
+
+    # Bootstrap-Meldung: 'Pods/pods-repeater wurden ... aktiv' beschreibt das
+    # Plugin-Setup. Im Kern wird Pods geladen; die Aussage bleibt, der Name
+    # wechselt.
+    bootstrap_message = (
+        "'PodsField_Repeater nicht geladen — Pods/pods-repeater wurden im "
+        "muplugins_loaded-Bootstrap nicht aktiv (siehe tests/bootstrap.php) "
+        "oder die Feldklasse wurde umbenannt.'"
+    )
+    if bootstrap_message not in text:
+        fail("Bootstrap-Meldung im set_up() nicht gefunden")
+    text = text.replace(bootstrap_message, "'PodsField_Repeater nicht geladen — der Pods-Kern wurde nicht geladen (siehe tests/bootstrap.php) oder die Feldklasse wurde umbenannt.'")
+
+    # Was der PR zusagt, muss im Test stehen bleiben.
+    assertions = [
+        "'Nested repeaters are not supported'",
+        "assertStringContainsString( 'Innere Einträge', $result[0]",
+        "assertStringNotContainsString( 'at most', $result[0]",
+        "assertArrayNotHasKey( 'inner_items', $clean[0]",
+        "assertSame( array( 'Zeile 1', 'Zeile 2' ), wp_list_pluck( $clean, 'title' ) )",
+    ]
+    for needle in assertions:
+        if needle not in text:
+            fail(f"Testaussage fehlt in der Portierung: {needle}")
+
+    if re.search(r"\bRepeaterNestedTest\b", text):
+        fail("Alter Klassenname RepeaterNestedTest steht noch in der Portierung")
+    if "new PodsField_Repeater()" not in text:
+        fail("Nested-Test instanziiert die Feldklasse PodsField_Repeater nicht")
+    if re.search(r"\bpods_repeater_\w+", text):
+        leftover = [
+            line.strip()
+            for line in text.splitlines()
+            if re.search(r"\bpods_repeater_\w+", line)
+        ]
+        fail("Plugin-Funktion steht noch in der Portierung: " + " | ".join(leftover[:3]))
+
+    return text
+
+
 PORTERS = {
     "RepeaterLimitTest": port_limit,
     "RepeaterContractTest": port_contract,
     "CoreIntegrationTest": port_integration,
+    "RepeaterNestedTest": port_nested,
 }
 
 
