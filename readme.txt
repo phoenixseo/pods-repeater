@@ -1,10 +1,10 @@
 === Pods Repeater Field ===
 Contributors: phoenixseo
 Tags: pods, repeater, repeatable, field, custom fields
-Requires at least: 6.4
-Tested up to: 6.8
+Requires at least: 7.1
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,12 +27,12 @@ Adds a **`repeater`** field type to [Pods](https://pods.io): a group of scalar s
 * **i18n-ready** — all strings translatable, text domain `pods-repeater`.
 * **Required sub-field validation** — per-row, empty rows never block saving.
 
-This plugin is under active development (v0.2.0). See the [GitHub repository](https://github.com/phoenixseo/pods-repeater) for the roadmap and source.
+This plugin is under active development (v0.2.1). See the [GitHub repository](https://github.com/phoenixseo/pods-repeater) for the roadmap and source.
 
 = Requirements =
 
-* WordPress 6.4+
-* PHP 7.4+
+* WordPress 7.1+ (tested on 7.1.3; earlier versions untested)
+* PHP 7.4+ (test suite passes on 7.4.33 and 8.3.33)
 * Pods 3.x (tested with 3.3.9.1)
 
 == Installation ==
@@ -87,6 +87,10 @@ No. Completely empty rows are discarded on save (`pre_save`); only rows with at 
 As a JSON string (for example `[{"subtitle":"Erste Zeile","link":"https://example.com/1"}]`) under the field's meta key, and decoded back to an array when read through Pods.
 
 == Changelog ==
+
+= 0.2.1 =
+* Requirements corrected to what was actually measured: WordPress 7.1 (tested on 7.1.3) instead of an untested 6.4, `Tested up to: 7.1` instead of 6.8.
+* PHP 7.4 support is now proven, not assumed: all 90 plugin PHP files pass `php -l` on PHP 7.4.33 and the full test suite passes under PHP 7.4.33 (104 tests, 2203 assertions). No PHP-8-only syntax or WordPress API newer than 6.4 is used.
 
 = 0.2.0 =
 * Field group registry: reusable sub-field sets (`repeater_group`), plus the read API `pods_repeater_get_groups()` and `pods_repeater_get_group_fields()`.
