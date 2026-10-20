@@ -1,0 +1,327 @@
+# Copyright (C) 2026 PHOENIXSEO
+# This file is distributed under the GPL-2.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Pods Repeater Field 0.2.1\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/pods-repeater\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-10-20T07:53:25+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: pods-repeater\n"
+
+#. Plugin Name of the plugin
+#: pods-repeater.php
+msgid "Pods Repeater Field"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: pods-repeater.php
+msgid "https://github.com/phoenixseo/pods-repeater"
+msgstr ""
+
+#. Description of the plugin
+#: pods-repeater.php
+msgid "Repeatable field groups (ACF-Repeater equivalent) for Pods. Generic, community-first: SDC Page Builder is one consumer among many."
+msgstr ""
+
+#. Author of the plugin
+#: pods-repeater.php
+msgid "PHOENIXSEO"
+msgstr ""
+
+#. Author URI of the plugin
+#: pods-repeater.php
+msgid "https://phoenixseo.de"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:110
+#: classes/admin/field-groups-page.php:111
+#: classes/admin/field-groups-page.php:176
+msgid "Field Groups"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:153
+#: classes/admin/field-groups-page.php:486
+#: classes/admin/field-groups-page.php:632
+msgid "You are not allowed to manage field groups."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:167
+msgid "Edit Field Group"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:167
+#: classes/admin/field-groups-page.php:178
+#: classes/admin/field-groups-page.php:239
+#: classes/admin/field-groups-page.php:351
+msgid "Add Field Group"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:169
+msgid "Back to list"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:238
+msgid "No field groups yet."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:245
+#: classes/admin/field-groups-page.php:311
+msgid "Slug"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:246
+#: classes/admin/field-groups-page.php:305
+#: classes/admin/field-groups-page.php:325
+msgid "Label"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:247
+#: classes/admin/field-groups-page.php:319
+msgid "Fields"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:248
+msgid "Actions"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:263
+msgid "Edit"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:265
+msgid "Delete"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:314
+msgid "Optional. Derived from the label when left empty."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:324
+msgid "Name"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:326
+msgid "Type"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:327
+msgid "Required"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:328
+#: classes/admin/field-groups-page.php:402
+msgid "Remove"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:348
+msgid "Add field"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:351
+msgid "Save Changes"
+msgstr ""
+
+#: classes/admin/field-groups-page.php:451
+msgid "Field group saved."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:456
+msgid "Field group deleted."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:462
+msgid "The field group could not be saved."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:482
+#: classes/admin/field-groups-page.php:628
+msgid "Invalid request."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:494
+#: classes/admin/field-groups-page.php:640
+msgid "Security check failed. Please reload the page and try again."
+msgstr ""
+
+#: classes/admin/field-groups-page.php:648
+msgid "This field group does not exist."
+msgstr ""
+
+#: classes/fields/repeater.php:98
+msgid "Repeater (Repeatable Group)"
+msgstr ""
+
+#: classes/fields/repeater.php:99
+msgid "Other"
+msgstr ""
+
+#: classes/fields/repeater.php:130
+msgid "Field Group"
+msgstr ""
+
+#: classes/fields/repeater.php:131
+msgid "Wenn gesetzt, kommen die Sub-Felder aus dieser Feldgruppe; das JSON darunter wird ignoriert."
+msgstr ""
+
+#: classes/fields/repeater.php:137
+msgid "Sub-Fields (JSON)"
+msgstr ""
+
+#: classes/fields/repeater.php:138
+msgid "JSON array of sub-field definitions."
+msgstr ""
+
+#: classes/fields/repeater.php:143
+msgid "Max rows"
+msgstr ""
+
+#: classes/fields/repeater.php:151
+msgid "Display Format"
+msgstr ""
+
+#: classes/fields/repeater.php:152
+msgid "Used as format for front-end display."
+msgstr ""
+
+#: classes/fields/repeater.php:157
+msgid "Item 1, Item 2"
+msgstr ""
+
+#: classes/fields/repeater.php:158
+msgid "One per line (br HTML tags)"
+msgstr ""
+
+#: classes/fields/repeater.php:159
+msgid "Unordered HTML list"
+msgstr ""
+
+#: classes/fields/repeater.php:160
+msgid "Ordered HTML list"
+msgstr ""
+
+#: classes/fields/repeater.php:161
+msgid "Custom separator"
+msgstr ""
+
+#: classes/fields/repeater.php:166
+msgid "Display Format Separator"
+msgstr ""
+
+#: classes/fields/repeater.php:167
+msgid "Used as separator for front-end display."
+msgstr ""
+
+#: classes/fields/repeater.php:175
+msgid "Disable DFV"
+msgstr ""
+
+#: classes/fields/repeater.php:176
+msgid "Render with the PHP input() renderer instead of the React DFV pipeline (required for custom field types without a DFV component)."
+msgstr ""
+
+#. translators: %d: maximum number of rows
+#: classes/fields/repeater.php:321
+#, php-format
+msgid "This field allows at most %d rows."
+msgstr ""
+
+#. translators: %s: sub-field label
+#: classes/fields/repeater.php:342
+#, php-format
+msgid "Field \"%s\" is required in every row."
+msgstr ""
+
+#. translators: 1: number of stored rows, 2: maximum number of rows
+#: classes/fields/repeater.php:510
+#, php-format
+msgid "This field holds %1$d rows but allows %2$d. Remove the extra rows before saving; the field will not save while it exceeds the limit."
+msgstr ""
+
+#: classes/fields/repeater.php:551
+msgid "Move up"
+msgstr ""
+
+#: classes/fields/repeater.php:552
+msgid "Move down"
+msgstr ""
+
+#: classes/fields/repeater.php:553
+msgid "Remove row"
+msgstr ""
+
+#: classes/fields/repeater.php:557
+msgid "Add row"
+msgstr ""
+
+#: classes/fields/repeater.php:592
+msgid "Nested repeaters are not supported."
+msgstr ""
+
+#: classes/fields/repeater.php:765
+msgid "No options defined for this pick field."
+msgstr ""
+
+#: classes/fields/repeater.php:815
+msgid "— Select —"
+msgstr ""
+
+#. translators: %s: number of entries
+#: classes/fields/repeater.php:847
+#, php-format
+msgid "%s entry"
+msgid_plural "%s entries"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s: field group slug
+#: classes/fields/repeater.php:1060
+#, php-format
+msgid "Die referenzierte Feldgruppe \"%s\" existiert nicht oder enthält keine Felder."
+msgstr ""
+
+#: includes/field-groups.php:181
+msgid "Group arguments must be an array."
+msgstr ""
+
+#: includes/field-groups.php:187
+msgid "A field group needs a label."
+msgstr ""
+
+#: includes/field-groups.php:199
+msgid "Could not derive a slug from the group label."
+msgstr ""
+
+#: includes/field-groups.php:211
+#: includes/field-groups.php:221
+msgid "Every field in a group needs a name."
+msgstr ""
+
+#. translators: %s: field name.
+#: includes/field-groups.php:230
+#, php-format
+msgid "Duplicate field name \"%s\" in this group."
+msgstr ""
+
+#. translators: 1: field name, 2: field type.
+#: includes/field-groups.php:241
+#, php-format
+msgid "Field \"%1$s\" uses the unsupported type \"%2$s\"."
+msgstr ""
+
+#: pods-repeater.php:148
+msgid "Sub-Fields"
+msgstr ""
+
+#: pods-repeater.php:149
+msgid "Manage the sub-fields of this repeater group."
+msgstr ""
+
+#: pods-repeater.php:151
+msgid "Sub-field editor loads when this dialog opens."
+msgstr ""

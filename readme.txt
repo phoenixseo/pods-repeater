@@ -86,9 +86,42 @@ No. Completely empty rows are discarded on save (`pre_save`); only rows with at 
 
 As a JSON string (for example `[{"subtitle":"Erste Zeile","link":"https://example.com/1"}]`) under the field's meta key, and decoded back to an array when read through Pods.
 
+== Uninstall ==
+
+Uninstalling (deleting, not deactivating) the plugin **deletes nothing by default** — with one exception: the plugin's own translation file is part of the plugin folder and goes with it, as with any plugin.
+
+Two options are kept by a default uninstall:
+
+* `pods_repeater_groups` — your reusable field groups (slug, label, ordered sub-field list).
+* `pods_repeater_groups_version` — the schema version of that registry.
+
+That is deliberate. Removing the plugin to try a rollback, or to rule it out while debugging, must not destroy the field groups you built. Reinstalling picks them up again.
+
+= Post meta is never touched =
+
+Repeater values are stored as post meta under field names **you** defined in your Pods. A plugin uninstall must not delete content it does not own, so `uninstall.php` does not query, and never deletes, post meta — not even of the repeater fields themselves. Deleting entries or their values stays your call, in the editor or through Pods.
+
+= Deleting the options on purpose =
+
+If you do want the field groups gone, add this line to `wp-config.php` **before** deleting the plugin:
+
+```php
+define( 'PODS_REPEATER_REMOVE_DATA_ON_UNINSTALL', true );
+```
+
+With that constant set, uninstalling deletes both options above. Nothing else changes: post meta stays untouched.
+
+There is deliberately no checkbox in the admin screen for this. An admin toggle would only be reachable while the plugin is still active — at the moment you delete it, that screen is already gone. `wp-config.php` is reachable at the time it matters.
+
+= What a default uninstall leaves behind =
+
+Nothing but those two options. The plugin creates no database tables, no custom post types, no user meta and no cron events, so there is nothing else to clean up. If you skipped the constant and want a clean slate, delete the two options manually (for example with `wp option delete pods_repeater_groups pods_repeater_groups_version`).
+
 == Changelog ==
 
 = 0.2.1 =
+* `uninstall.php` added: uninstalling keeps the field groups by default; the constant `PODS_REPEATER_REMOVE_DATA_ON_UNINSTALL` removes them on request. Post meta is never touched. See the Uninstall section.
+* `languages/pods-repeater.pot` generated with `wp i18n make-pot` (69 strings), so the `Domain Path` header points at a real folder.
 * Requirements corrected to what was actually measured: WordPress 7.1 (tested on 7.1.3) instead of an untested 6.4, `Tested up to: 7.1` instead of 6.8.
 * PHP 7.4 support is now proven, not assumed: all 90 plugin PHP files pass `php -l` on PHP 7.4.33 and the full test suite passes under PHP 7.4.33 (104 tests, 2203 assertions). No PHP-8-only syntax or WordPress API newer than 6.4 is used.
 

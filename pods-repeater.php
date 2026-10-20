@@ -159,14 +159,27 @@ add_filter( 'pods_admin_setup_edit_repeater_additional_field_options', 'pods_rep
 /**
  * Translations laden (Text Domain 'pods-repeater').
  *
- * Gebündelte .mo-Dateien liegen in /languages (siehe Domain-Path-Header);
- * wp.org-Sprachpakete übernimmt WordPress automatisch. Hook auf 'init' wie
- * von WP 6.7+ empfohlen (JIT-Warnung „translation loading triggered too
- * early" bei plugins_loaded). Bewusst nicht an Pods gebunden: Die
- * __()-Aufrufe (classes/field-repeater.php) feuern erst beim Feld-Rendering
- * im Admin, also lange nach init.
+ * Seit WP 4.6 registriert der Core den Pfad `languages/` selbst aus dem
+ * `Domain Path`-Header; ein Plugin von wp.org braucht diesen Aufruf also
+ * nicht (Plugin Check meldet ihn als `load_plugin_textdomainFound`).
+ * Er bleibt trotzdem, mit zwei Gründen:
+ *
+ *   1. Gebündelte .mo-Dateien (im Paket ausgeliefert, nicht als
+ *      Sprachpaket) lädt der JIT-Pfad des Cores nur, wenn der Registry-
+ *      Pfad stimmt. Ein expliziter Aufruf hängt nicht davon ab, dass der
+ *      Header richtig gepflegt ist.
+ *   2. Der Skript-Pfad läuft auch in Umgebungen ohne wp.org-Anbindung
+ *      (Git-Clone, eigener Update-Server).
+ *
+ * Rückgabe `true` heißt: der Pfad existiert und ist lesbar.
+ *
+ * Zeitpunkt: 'init', wie von WP 6.7+ empfohlen (die JIT-Warnung
+ * „translation loading triggered too early" entsteht sonst bei
+ * plugins_loaded). Die __()-Aufrufe feuern erst beim Feld-Rendering im
+ * Admin, also lange nach init.
  */
 function pods_repeater_load_textdomain() {
+	// phpcs:ignore PluginCheck.CodeAnalysis.DiscouragedFunctions.load_plugin_textdomainFound -- bewusste Kompatibilität für gebündelte .mo-Dateien, siehe Docblock.
 	load_plugin_textdomain( 'pods-repeater', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
 }
 add_action( 'init', 'pods_repeater_load_textdomain' );
@@ -224,7 +237,11 @@ function pods_repeater_screen_hosts_forms( $screen ) {
 	// request's 'page' parameter (set by add_menu_page/add_submenu_page
 	// handling) is the reliable marker — covers page=pods (list), action=edit
 	// (field editor, hosts the repeater options dialog) and settings.
-	// Read-only screen detection: no state change, so no nonce required.
+	// Read-only screen detection: the value only decides whether a script
+	// is enqueued, no state is changed and no data is echoed back, so no
+	// nonce applies here. The ignore is scoped to the sniff by name — a
+	// blanket ignore would also hide a later, real nonce omission.
+	// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen detection, no state change.
 	$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 	// Menü-Slug der Pods-Admin-Seite ('page=pods'), keine Textdomain: dieser
 	// String gehört zu dieser Erkennung und wird beim Domain-Wechsel nicht
