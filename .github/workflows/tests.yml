@@ -82,6 +82,12 @@ jobs:
           WP_TEST_DB_PASSWORD: password
         run: |
           php -v | head -1
+          # PrPackageTest prueft das generierte PR-Paket unter dist/. Das ist
+          # gitignored, also im Klon nicht vorhanden — hier bauen. Bewusst ein
+          # eigener Schritt statt Magie im Test: der Container hat kein python3,
+          # und ein Test, der sein Pruefobjekt selbst erzeugt, versteckt die
+          # Abhaengigkeit.
+          bash scripts/build-pr-package.sh
           vendor/bin/phpunit --testsuite PodsRepeater
 
   phpcs:

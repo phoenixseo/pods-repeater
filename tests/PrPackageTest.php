@@ -8,13 +8,12 @@
  * Testdatei waere erst beim Maintainer aufgefallen. Dieser Test prueft die
  * Zusagen des Pakets maschinell.
  *
- * Abhaengigkeit: dist/ ist gitignored und wird vom Generator auf dem Host
- * gebaut (scripts/build-pr-package.sh braucht python3, der Testcontainer
- * hat es nicht). Fehlt das Paket, schlaegt der Test mit dieser Anweisung
- * fehl — nicht skipped: ein gruener Lauf ohne Pruefobjekt waere wertlos.
- *
- * Vor dem Testlauf auf dem Host:
- *   bash scripts/build-pr-package.sh
+ * Abhaengigkeit: dist/ ist gitignored und wird von scripts/build-pr-package.sh
+ * erzeugt (bash + python3). Fehlt das Paket, schlaegt der Test mit der
+ * Anweisung fehl — nicht skipped: ein gruener Lauf ohne Pruefobjekt waere
+ * wertlos. Gebaut wird es ausserhalb der Suite (lokal: bash
+ * scripts/build-pr-package.sh; CI: eigener Workflow-Schritt), weil der
+ * Testcontainer kein python3 hat.
  *
  * @package PodsRepeater
  */
@@ -41,9 +40,8 @@ class PrPackageTest extends WP_UnitTestCase {
 	/**
 	 * Paket muss vor dem Testlauf gebaut sein.
 	 *
-	 * Der Build laeuft auf dem Host; der Testcontainer hat kein python3.
-	 * Darum hier pruefen statt bauen — mit einer Meldung, die den fehlenden
-	 * Schritt nennt.
+	 * Gebaut wird ausserhalb: der Testcontainer hat kein python3. Die Meldung
+	 * nennt den fehlenden Schritt statt nur den Pfad.
 	 */
 	public function set_up() {
 		parent::set_up();
@@ -54,7 +52,7 @@ class PrPackageTest extends WP_UnitTestCase {
 
 		$this->assertFileExists(
 			$this->port_file,
-			'PR-Paket fehlt. Vor dem Testlauf auf dem Host bauen: bash scripts/build-pr-package.sh'
+			'PR-Paket fehlt. Vorher bauen: bash scripts/build-pr-package.sh (braucht python3)'
 		);
 	}
 
