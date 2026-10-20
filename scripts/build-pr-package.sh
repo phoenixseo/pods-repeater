@@ -228,6 +228,15 @@ im Pods-Namensraum liegen. Der Kern kennt keine dieser Namen (geprueft gegen
 3.3.9.1), also kollidiert das nicht mit Bestandsklassen. Ein Test haelt den
 Vertrag zwischen PHP und JS fest.
 
+## Deinstallation
+
+Dieses Paket bringt kein `uninstall.php` mit, und der Kern braucht keins: der
+Feldtyp legt keine eigene Tabelle und keine eigene Option an. Die Werte stehen
+im Post-Meta bzw. in den Pods-Feldoptionen — beides gehoert Pods und wird von
+Pods' eigener Deinstallationslogik behandelt. Ein Feldtyp, der beim
+Deinstallieren eigenmaechtig Meta loescht, wuerde Daten fremder Felder
+mitreissen.
+
 ## Tests
 
 {{TOTAL}} Testmethoden in drei Dateien, alle {{BT}}WP_UnitTestCase{{BT}}, keine
@@ -250,10 +259,11 @@ Die Option `repeater_group` verweist auf eine wiederverwendbare Feldgruppe.
 Diese Registry ist ein Plugin-Konzept; im Kern gibt es sie nicht. Die
 Feldklasse prueft mit `function_exists()` und faellt sauber auf Inline-JSON
 zurueck: `options()` liefert `repeater_group` mit leerer Auswahl, wenn
-`pods_repeater_get_groups()` fehlt; `get_sub_fields()` liest
-`repeater_sub_fields` (JSON), wenn `pods_repeater_get_group_fields()` fehlt.
+`repeater_get_groups()` fehlt; `get_sub_fields()` und `get_group_notice()`
+lesen `repeater_sub_fields` (JSON), wenn `repeater_get_group_fields()` fehlt.
 Kein Fatal, keine Warnung — der Typ ist im Kern voll benutzbar, nur ohne den
-Komfort geteilter Gruppen.
+Komfort geteilter Gruppen. Beide Funktionen haben im Kern keinen
+Plugin-Praefix: der PR bringt die Feldklasse, der Name gehoert ihm.
 
 ## Maintenance
 
@@ -375,6 +385,16 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
 - [ ] **Lizenzheader.** Feldklasse und Skript tragen den GPL-2.0-or-later-
       Header des Plugins. Vor dem PR gegen die Kopfzeilen bestehender
       Kern-Felddateien abgleichen (Jahr, Copyright-Inhaber).
+- [ ] **Versionsnummer im Kern.** Dieses Paket traegt `0.2.1` als Plugin-
+      Version und im Changelog-Eintrag `= 3.3.10 =` fuer Pods. Vor dem PR
+      pruefen, welche Nummer der Kern als naechste fuehrt — die Zahl im
+      Changelog-Block ist eine Annahme, nicht gemessen.
+- [ ] **Ob der Fix in 0.2.1 oeffentlich auftauchen soll.** Der Eintrag
+      „Fixed: field groups admin form posted to `admin.php`" beschreibt einen
+      Fehler, der nie veroeffentlicht war (0.2.0 war die letzte Fassung mit
+      dem Defekt). Wer den Fix nicht als Bugfix in der Versionshistorie
+      stehen haben will, streicht die Zeile aus `readme.txt` — die
+      Versionsnummer bleibt davon unberuehrt.
 
 ## 2. Vor dem Absenden technisch pruefen
 
@@ -398,7 +418,13 @@ Nachricht an Dritte. Alles darunter ist eine Entscheidung des Auftraggebers.
 - React-DFV-Editor fuer die Sub-Feld-Konfiguration — Konfiguration ist
   zunaechst JSON bzw. eine Feldgruppe.
 - Die Feldgruppen-Registry — Plugin-Konzept, im Kern nicht enthalten. Der
-  Typ faellt per `function_exists()` sauber auf Inline-JSON zurueck.
+  Typ faellt per `function_exists()` sauber auf Inline-JSON zurueck (Test 15
+  haelt den Zweig fest: bei fehlender Funktion kommt ein leerer Hinweis, kein
+  Fatal).
+- `uninstall.php` und `languages/` — Plugin-Haushalt (Opt-in-Cleanup zweier
+  Optionen, POT-Datei). Im Kern deinstalliert man kein Feld, und die
+  Strings laufen dort ueber die Kern-Textdomain `pods` (in der portierten
+  Feldklasse 35 Ersetzungen, 0 verbleibende `pods-repeater`-Fundstellen).
 
 ## 4. Nach dem Einreichen
 

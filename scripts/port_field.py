@@ -101,14 +101,68 @@ def main() -> None:
             + " | ".join(leftovers[:3])
         )
 
+    # --- 5b. Gruppen-Registry: Praefix fallen lassen ----------------------
+    # Die portierten Tests rufen `repeater_get_group_fields()` auf (ohne
+    # Plugin-Praefix, so wie der PR sie im Kern einfuehren wuerde). Die
+    # Feldklasse rief aber weiter `pods_repeater_get_group_fields()` — der
+    # function_exists()-Guard war damit immer falsch und die Feldgruppe im
+    # Kern wirkungslos. Gezaehlt wird der Guard selbst plus jede
+    # verdaechtige Stelle, an der ein Registry-Aufruf ohne guard steht:
+    # ungepruefter Aufruf neben geprueftem Aufruf waere ein Fatal, sobald
+    # der Kern die Funktion nicht hat.
+    for old, new in (
+        ("pods_repeater_get_group_fields", "repeater_get_group_fields"),
+        ("pods_repeater_get_groups", "repeater_get_groups"),
+    ):
+        old_guards = text.count(f"function_exists( '{old}' )")
+        old_calls = text.count(old)
+        if old_calls == 0:
+            fail(f"{old} nicht in der Quelle gefunden — Quelle wurde umgebaut")
+        text = text.replace(old, new)
+        new_guards = text.count(f"function_exists( '{new}' )")
+        new_calls = text.count(new)
+
+        if new_calls - new_guards != old_calls - old_guards:
+            fail(
+                f"{old}: {old_calls - old_guards} Aufruf(se) ohne Guard in der "
+                f"Quelle, nach der Ersetzung {new_calls - new_guards} — die "
+                f"Ersetzung traf Aufruf und Guard ungleich"
+            )
+        print(
+            f"feld: {old_calls} Vorkommen {old} -> {new} "
+            f"({new_guards} Guard(s), {new_calls - new_guards} Aufruf(se) dahinter)",
+            file=sys.stderr,
+        )
+
+    # Jede Zeile, die eine Registry-Funktion AUFRUFT, muss im selben
+    # Anweisungsblock hinter einem function_exists()-Guard liegen: im
+    # if-Kopf davor oder (bei langen if-Koepfen) in den Zeilen oberhalb bis
+    # zur letzten offenen Klammer. Ein ungepruefter Aufruf waere ein Fatal,
+    # sobald der Kern die Registry nicht mitbringt.
+    lines = text.splitlines()
+    for call in ("repeater_get_group_fields(", "repeater_get_groups("):
+        for index, line in enumerate(lines):
+            if call not in line:
+                continue
+            end = max(0, index - 8)
+            window = "\n".join(lines[end : index + 1])
+            if f"function_exists( '{call[:-1]}'" not in window or not any(
+                "{" in l or "if (" in l for l in lines[end : index + 1]
+            ):
+                fail(
+                    f"Registry-Aufruf ohne function_exists()-Guard, "
+                    f"Zeile {index + 1}: {line.strip()}"
+                )
+
     # --- 6. Invarianten fuer die Pods-Konvention ----------------------
     if "class PodsField_Repeater extends PodsField" not in text:
         fail("Klassenname PodsField_Repeater fehlt")
-    if "pods_repeater_" not in text:
+    if "pods_repeater_" in text:
         fail(
-            "Alle pods_repeater_-Vorkommen verschwunden — die "
-            "function_exists()-Guards sind die einzige Kern-Beruehrung und "
-            "muessen bleiben"
+            "pods_repeater_-Praefix steht noch in der Kern-Portierung: "
+            + " | ".join(
+                line.strip() for line in text.splitlines() if "pods_repeater_" in line
+            )[:300]
         )
 
     # CSS-Klassen muessen erhalten sein, sonst bricht das Admin-UI. Geprueft

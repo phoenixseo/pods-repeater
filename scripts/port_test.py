@@ -280,6 +280,20 @@ def port_integration(text: str) -> str:
     if "class_exists( 'PodsForm' )" not in text:
         fail("Integrationsbeleg prüft den Kern (PodsForm) nicht mehr")
 
+    # Registry-Funktion: im Kern ohne Plugin-Praefix (der PR fuehrt sie dort
+    # ein). Kein Stub-Umbau noetig — die Testdatei definiert sie nicht
+    # selbst; Test 15 prueft nur den Guard-Zweig bei fehlender Funktion.
+    if re.search(r"\bpods_repeater_\w+", text):
+        leftover = [
+            line.strip()
+            for line in text.splitlines()
+            if re.search(r"\bpods_repeater_\w+", line)
+        ]
+        fail(
+            "Plugin-Funktion steht noch in der Testportierung: "
+            + " | ".join(leftover[:3])
+        )
+
     return text
 
 

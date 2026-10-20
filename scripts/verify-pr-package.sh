@@ -167,6 +167,37 @@ check_pr_text() {
   grep -q "${total} Testmethoden" "${desc}" || \
     DIE "PR-Beschreibung nennt nicht '${total} Testmethoden' (Zahl aus dem Build)"
 
+  # Kein Plugin-Praefix in der Beschreibung: die Feldklasse prueft im Kern
+  # `repeater_get_groups()` / `repeater_get_group_fields()`. Stand hier
+  # `pods_repeater_...`, beschrieb der PR einen Guard, den der Code nicht hat.
+  if grep -n 'pods_repeater_[a-z_]*(' "${desc}"; then
+    DIE "PR-Beschreibung nennt Plugin-Funktionen mit Praefix — im Kern heissen sie repeater_*"
+  fi
+
+  # Jede in der Beschreibung genannte Feldklassen-Funktion, die als
+  # function_exists()-Zweig beschrieben wird, muss im portierten Code
+  # tatsaechlich hinter einem Guard stehen. Sonst beschreibt der Text eine
+  # Absicherung, die es nicht gibt.
+  local func
+  for func in repeater_get_groups repeater_get_group_fields; do
+    if grep -q "${func}()" "${desc}"; then
+      grep -q "function_exists( '${func}' )" "${CHECK_DIR}/classes/fields/repeater.php" || \
+        DIE "Beschreibung verweist auf ${func}() als guarded, die Feldklasse hat den Guard nicht"
+    fi
+  done
+
+  # Version: der Header ist die Wahrheit. Steht im PR-Text eine andere
+  # Version, ist eine davon falsch.
+  local header_version
+  header_version="$(sed -n "s/.*\* Version:[[:space:]]*\([0-9][0-9.]*\).*/\1/p" "${REPO_ROOT}/pods-repeater.php" | head -1)"
+  local readme_version
+  readme_version="$(sed -n 's/^Stable tag:[[:space:]]*\([0-9][0-9.]*\).*/\1/p' "${REPO_ROOT}/readme.txt" | head -1)"
+  [[ -n "${header_version}" && -n "${readme_version}" ]] || \
+    DIE "Version nicht lesbar (Header: '${header_version}', readme.txt: '${readme_version}')"
+  [[ "${header_version}" == "${readme_version}" ]] || \
+    DIE "Version auseinander: Header ${header_version}, readme.txt Stable tag ${readme_version}"
+  printf '  Version Header/readme.txt%s %s/%s\n' "" "${header_version}" "${readme_version}"
+
   # Ein unquoted Heredoc haette die Backticks als Command-Substitution
   # ausgefuehrt und die Inline-Code-Begriffe durch Leerstrings ersetzt.
   # Indiz: eine Stelle wie "(, , ," oder "Typ  hinzu:" — zwei Leerzeichen

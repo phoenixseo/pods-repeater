@@ -120,10 +120,11 @@ Nothing but those two options. The plugin creates no database tables, no custom 
 == Changelog ==
 
 = 0.2.1 =
+* Fixed: the field groups admin form posted to `admin.php` instead of `admin-post.php`, so saving a group was silently discarded. Success notices were also invisible in the form, and an empty group slug was dropped from the redirect URL.
 * `uninstall.php` added: uninstalling keeps the field groups by default; the constant `PODS_REPEATER_REMOVE_DATA_ON_UNINSTALL` removes them on request. Post meta is never touched. See the Uninstall section.
 * `languages/pods-repeater.pot` generated with `wp i18n make-pot` (69 strings), so the `Domain Path` header points at a real folder.
 * Requirements corrected to what was actually measured: WordPress 7.1 (tested on 7.1.3) instead of an untested 6.4, `Tested up to: 7.1` instead of 6.8.
-* PHP 7.4 support is now proven, not assumed: all 90 plugin PHP files pass `php -l` on PHP 7.4.33 and the full test suite passes under PHP 7.4.33 (104 tests, 2203 assertions). No PHP-8-only syntax or WordPress API newer than 6.4 is used.
+* PHP 7.4 support is now proven, not assumed: all plugin PHP files pass `php -l` on PHP 7.4.33 and the full test suite passes under PHP 7.4.33 as well as PHP 8.3 (108 tests, 2226 assertions on both). No PHP-8-only syntax or WordPress API newer than 6.4 is used.
 
 = 0.2.0 =
 * Field group registry: reusable sub-field sets (`repeater_group`), plus the read API `pods_repeater_get_groups()` and `pods_repeater_get_group_fields()`.
